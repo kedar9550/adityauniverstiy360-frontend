@@ -91,6 +91,8 @@ export default function Hero2() {
     fetchDepartments();
   }, [school]);
 
+
+
   //  Validation
   const validateForm = () => {
     let newErrors = {
@@ -128,6 +130,8 @@ export default function Hero2() {
     if (!validateForm()) return;
     setCompletedMessage("");
 
+
+
     try {
       setLoading(true);
       setFormLocked(true);
@@ -145,6 +149,7 @@ export default function Hero2() {
         browserSignature: browserSignature,
         employeeRole: employeeRole
       });
+
 
       if (res.data.alreadyCompleted) {
         setCompletedMessage(res.data.message);
@@ -338,11 +343,45 @@ export default function Hero2() {
               }
             }}
           >
-            <MenuItem value="Faculty">Faculty</MenuItem>
+            {schoolsList.find((s) => s._id === school)?.code !== "UI" && (
+              <MenuItem value="Faculty">Faculty</MenuItem>
+            )}
+
             {schoolsList.find((s) => s._id === school)?.code === "SOE" && (
               <MenuItem value="HOD">HOD</MenuItem>
             )}
-            <MenuItem value="Assoc Dean/Dean">Assoc Dean/Dean</MenuItem>
+
+            {schoolsList.find((s) => s._id === school)?.code !== "UI" && (
+              <MenuItem value="Assoc Dean/Dean">Assoc Dean/Dean</MenuItem>
+            )}
+
+
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="dean_r&c">Dean Research & Consultancy</MenuItem>
+            )}
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="dean_careers">Dean Career Development</MenuItem>
+            )}
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="dean_student_affairs">Dean Student Affairs</MenuItem>
+            )}
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="dean_admissions">Dean Admissions</MenuItem>
+            )}
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="dean_administration">Dean Administration</MenuItem>
+            )}
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="dean_iqac">Dean IQAC</MenuItem>
+            )}
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="CoE">Controller Of Examinations</MenuItem>
+            )}
+            {schoolsList.find((s) => s._id === school)?.code === "UI" && (
+              <MenuItem value="dean_ir">Dean International Relations</MenuItem>
+            )}
+
+
           </TextField>
 
 
