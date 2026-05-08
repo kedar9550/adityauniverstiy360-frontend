@@ -555,16 +555,7 @@ function Reports() {
             <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
 
                 {/* Card 1+2: Overall Report + Leadership Member in one card with vertical divider */}
-                <div style={{
-                    background: '#ffffff',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '12px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                    display: 'flex',
-                    alignItems: 'stretch',
-                    overflow: 'hidden',
-                    minWidth: '420px',
-                }}>
+                <div className="leadership-summary-card">
                     {/* Left: Overall Report */}
                     <div style={{
                         padding: '20px 28px',
@@ -593,7 +584,7 @@ function Reports() {
                     </div>
 
                     {/* Vertical Divider */}
-                    <div style={{ width: '1px', background: '#e2e8f0', flexShrink: 0, alignSelf: 'stretch' }} />
+                    <div className="summary-divider" />
 
                     {/* Right: Leadership Member */}
                     <div style={{

@@ -41,6 +41,15 @@ const sectionColors = [
   "#ec4899", // Pink
 ];
 
+const toProperCase = (str) => {
+  if (!str) return "";
+  return str
+    .toLowerCase()
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
 export default function FeedbackPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -428,7 +437,7 @@ export default function FeedbackPage() {
                         lineHeight: 1.2,
                       }}
                     >
-                      {r.assignedName || r.name}
+                      {toProperCase(r.assignedName) || r.name}
                     </Typography>
                     <Typography sx={{ color: "#0b5299", fontSize: "0.78rem", mt: 0.3 }}>
                       {r.key === "hod" ? `HOD ${departmentCode}` : r.name}
@@ -544,7 +553,7 @@ export default function FeedbackPage() {
                           lineHeight: 1.2,
                         }}
                       >
-                        {r.assignedName || r.name}
+                        {toProperCase(r.assignedName) || r.name}
                       </Typography>
                       {r.assignedName && (
                         <Typography
