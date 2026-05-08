@@ -94,6 +94,12 @@ export default function FeedbackPage() {
     employeeRole === "Assoc Dean/Dean" ? "yes" : null,
   );
 
+  // Track whether the user has passed the initial role-selection screen
+  // (only relevant when there are zero mandatory roles)
+  const [roleSelectionDone, setRoleSelectionDone] = useState(
+    mandatoryRoles.length > 0, // skip screen if mandatory roles already exist
+  );
+
   const role = roles[activeRole] || roles[0];
   const port = import.meta.env.VITE_BACKEND_URL;
 
@@ -335,6 +341,136 @@ export default function FeedbackPage() {
       setSubmitting(false);
     }
   };
+
+  // ── ROLE SELECTION SCREEN (University / all-optional case) ──────────────
+  if (!roleSelectionDone) {
+    return (
+      <Box
+        sx={{
+          p: { xs: 2, sm: 3 },
+          width: "100%",
+          minHeight: "100vh",
+          background: "#f7f9fc",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Paper
+          sx={{
+            mx: "auto",
+            p: { xs: 3, md: 5 },
+            borderRadius: "16px",
+            maxWidth: 960,
+            width: "100%",
+            background: "#ffffff",
+            border: "2px dashed #0b5299",
+            boxShadow: "0 20px 60px rgba(2,6,23,0.06)",
+            textAlign: "center",
+          }}
+        >
+          <Typography variant="h5" sx={{ color: "#0b5299", fontWeight: 700, mb: 1 }}>
+            Select Feedback Roles
+          </Typography>
+          <Box
+            sx={{
+              width: "100%",
+              height: 3,
+              background: "#be9337",
+              mx: "auto",
+              my: 1.5,
+              borderRadius: 2,
+              mb: 3,
+            }}
+          />
+          <Typography sx={{ color: "#475569", fontSize: "15px", mb: 4 }}>
+            Please select the leadership role(s) you would like to provide
+            feedback for:
+          </Typography>
+
+          {/* Horizontal flex-wrap grid of checkboxes */}
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              gap: 3,
+              mb: 4,
+            }}
+          >
+            {optionalRoles.map((r) => (
+              <FormControlLabel
+                key={r.roleId}
+                control={
+                  <Checkbox
+                    checked={tempSelectedKeys.includes(r.key)}
+                    onChange={() => {
+                      setTempSelectedKeys((prev) =>
+                        prev.includes(r.key)
+                          ? prev.filter((k) => k !== r.key)
+                          : [...prev, r.key],
+                      );
+                    }}
+                    sx={{
+                      color: "#94a3b8",
+                      "&.Mui-checked": { color: "#0b5299" },
+                      pt: 0,
+                    }}
+                  />
+                }
+                label={
+                  <Box sx={{ textAlign: "left" }}>
+                    <Typography
+                      sx={{
+                        color: "#1e293b",
+                        fontWeight: 700,
+                        fontSize: "0.9rem",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {r.assignedName || r.name}
+                    </Typography>
+                    <Typography sx={{ color: "#0b5299", fontSize: "0.78rem", mt: 0.3 }}>
+                      {r.key === "hod" ? `HOD ${departmentCode}` : r.name}
+                    </Typography>
+                  </Box>
+                }
+                sx={{ alignItems: "flex-start", minWidth: 180 }}
+              />
+            ))}
+          </Box>
+
+          <Button
+            variant="contained"
+            disabled={tempSelectedKeys.length === 0}
+            onClick={() => {
+              setSelectedOptionalKeys(tempSelectedKeys);
+              setTempSelectedKeys([]);
+              setRoleSelectionDone(true);
+              setActiveRole(0);
+              setActiveSection(0);
+              window.scrollTo(0, 0);
+            }}
+            sx={{
+              background: "#0b5299",
+              color: "white",
+              px: 6,
+              py: 1.5,
+              borderRadius: "10px",
+              fontWeight: 700,
+              fontSize: "1rem",
+              boxShadow: "0 10px 20px rgba(11,82,153,0.2)",
+              "&:hover": { background: "#094a88" },
+              "&.Mui-disabled": { background: "#cbd5e1", color: "#94a3b8" },
+            }}
+          >
+            Start Feedback
+          </Button>
+        </Paper>
+      </Box>
+    );
+  }
+
 
   return (
     <Box
