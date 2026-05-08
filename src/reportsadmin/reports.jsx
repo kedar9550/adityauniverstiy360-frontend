@@ -127,11 +127,11 @@ function Reports() {
     }
 
     const [data, setData] = useState(stateData.reportData || null);
-    //console.log(data)
     const [loading, setLoading] = useState(!stateData.reportData);
     const [error, setError] = useState(null);
     const [showAllQuestions, setShowAllQuestions] = useState(false);
     const [selectedQuestionIdx, setSelectedQuestionIdx] = useState(0);
+    const [selectedGiverRole, setSelectedGiverRole] = useState(null); // null = Overall
 
     // New states for Improvement Comparison
     const [comparisonData, setComparisonData] = useState(null);
@@ -154,7 +154,7 @@ function Reports() {
         roundDisplayString = parts.length > 0 ? parts.join(' | ') : '';
     }
     const prevRoundName = prevRoundObj ? `${prevRoundObj.academicYear} | Cycle ${prevRoundObj.cycle}` : 'Previous Session';
-    const scopeDisplayString = schoolName ? `Filtered Report: ${schoolName} - ${departmentName || 'All Departments'}` : 'Overall Report';
+    const scopeDisplayString = (selectedGiverRole ? `${selectedGiverRole} Report` : 'Overall Report') + (schoolName ? ` (${schoolName} - ${departmentName || 'All Departments'})` : '');
 
     const comparisonMap = React.useMemo(() => {
         const map = {};
@@ -167,6 +167,8 @@ function Reports() {
     const filteredQuestions = data?.questions
         ? data.questions.filter(item => !item.section?.toLowerCase().includes('open ended') && !item.section?.toLowerCase().includes('open-ended'))
         : [];
+
+    const giverRoleLabel = selectedGiverRole === null ? 'Overall (All Roles)' : selectedGiverRole;
 
     const handleExportCSV = () => {
         if (!data) return;
@@ -183,12 +185,25 @@ function Reports() {
             csvContent += `Member Name,${escapeCsv(data.targetPersonName)}\n`;
         }
         csvContent += `Designation,${escapeCsv(displayRole)}\n`;
+        csvContent += `Giver Role Filter,${escapeCsv(giverRoleLabel)}\n`;
         csvContent += `Overall Rating,${escapeCsv(data.overallRating)}\n`;
         if (comparisonData && prevRoundObj && comparisonData.isSamePerson) {
             const sign = comparisonData.overallImprovement > 0 ? '+' : '';
             csvContent += `Improvement vs ${escapeCsv(prevRoundName)},${escapeCsv(sign + comparisonData.overallImprovement.toFixed(2))}\n`;
         }
         csvContent += `Total Responses,${escapeCsv(data.responses)}\n\n`;
+
+        // Responses by Role breakdown
+        if (data.giverRoleStats) {
+            csvContent += "Responses by Giver Role\n";
+            csvContent += "Role,Count,Avg Rating\n";
+            Object.entries(data.giverRoleStats).forEach(([key, val]) => {
+                const count = typeof val === 'object' ? (val.count ?? 0) : val;
+                const avg = typeof val === 'object' ? (val.avgRating ?? 0) : 0;
+                csvContent += `${escapeCsv(key)},${escapeCsv(count)},${escapeCsv(avg.toFixed(2))}\n`;
+            });
+            csvContent += "\n";
+        }
 
         if (data.sections && data.sections.length > 0) {
             const filteredSections = data.sections.filter(item => !item.section?.toLowerCase().includes('open ended') && !item.section?.toLowerCase().includes('open-ended'));
@@ -234,7 +249,8 @@ function Reports() {
         const link = document.createElement("a");
         link.href = url;
         const sanitizedRole = displayRole.replace(/\s+/g, '_');
-        link.setAttribute("download", `Feedback_Report_${sanitizedRole}.csv`);
+        const sanitizedGiver = giverRoleLabel.replace(/[^a-zA-Z0-9]/g, '_');
+        link.setAttribute("download", `Feedback_Report_${sanitizedRole}_${sanitizedGiver}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -266,6 +282,8 @@ function Reports() {
         }
         doc.text(`Designation: ${displayRole}`, 14, yPos);
         yPos += 7;
+        doc.text(`Giver Role Filter: ${giverRoleLabel}`, 14, yPos);
+        yPos += 7;
         doc.text(`Overall Rating: ${data.overallRating}`, 14, yPos);
         yPos += 7;
 
@@ -276,8 +294,29 @@ function Reports() {
         }
 
         doc.text(`Total Responses: ${data.responses}`, 14, yPos);
+        yPos += 7;
 
-        let startY = yPos + 6;
+        // Responses by Role table in PDF
+        if (data.giverRoleStats) {
+            doc.setFontSize(12);
+            doc.text('Responses by Giver Role:', 14, yPos);
+            yPos += 4;
+            autoTable(doc, {
+                startY: yPos,
+                head: [['Role', 'Count', 'Avg Rating']],
+                body: Object.entries(data.giverRoleStats).map(([key, val]) => [
+                    key,
+                    typeof val === 'object' ? (val.count ?? 0) : val,
+                    typeof val === 'object' ? (val.avgRating ?? 0).toFixed(2) : '0.00'
+                ]),
+                theme: 'grid',
+                styles: { fontSize: 9 },
+                headStyles: { fillColor: [1, 66, 132] },
+            });
+            yPos = doc.lastAutoTable.finalY + 8;
+        }
+
+        let startY = yPos + 2;
 
         // Section Performance
         if (data.sections && data.sections.length > 0) {
@@ -345,31 +384,46 @@ function Reports() {
         }
 
         const sanitizedRole = displayRole.replace(/\s+/g, '_');
-        doc.save(`Feedback_Report_${sanitizedRole}.pdf`);
+        const sanitizedGiverPDF = giverRoleLabel.replace(/[^a-zA-Z0-9]/g, '_');
+        doc.save(`Feedback_Report_${sanitizedRole}_${sanitizedGiverPDF}.pdf`);
     };
 
-    useEffect(() => {
-        // If navigated directly without state, fetch from API
-        if (!data && !error) {
-            window.scrollTo(0, 0);
-            setLoading(true);
-            const params = { role };
-            if (school) params.school = school;
-            if (department) params.department = department;
-            if (roundId) params.roundId = roundId;
+    const fetchReportData = React.useCallback((giverRoleFilter) => {
+        setLoading(true);
+        const params = { role };
+        if (school) params.school = school;
+        if (department) params.department = department;
+        if (roundId) params.roundId = roundId;
+        if (giverRoleFilter) params.giverRole = giverRoleFilter;
 
-            axios.get(`${API_BASE_URL}feedback360/reports`, { params })
-                .then(res => {
-                    setData(res.data);
-                    setLoading(false);
-                })
-                .catch(err => {
-                    console.error("Error fetching report data", err);
-                    setError("Failed to load report data. Please try again or navigate from Dashboard.");
-                    setLoading(false);
-                });
+        axios.get(`${API_BASE_URL}feedback360/reports`, { params })
+            .then(res => {
+                setData(prev => ({
+                    ...res.data,
+                    // Always preserve the top-level giverRoleStats from the Overall fetch
+                    giverRoleStats: giverRoleFilter ? prev?.giverRoleStats : res.data.giverRoleStats
+                }));
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error("Error fetching report data", err);
+                setError("Failed to load report data. Please try again or navigate from Dashboard.");
+                setLoading(false);
+            });
+    }, [role, school, department, roundId]);
+
+    useEffect(() => {
+        // Initial fetch if not passed via state
+        if (!stateData.reportData) {
+            window.scrollTo(0, 0);
+            fetchReportData(null);
         }
-    }, [data, error, role, school, department, roundId]);
+    }, []);  // eslint-disable-line
+
+    const handleRoleCardClick = (giverRoleFilter) => {
+        setSelectedGiverRole(giverRoleFilter);
+        fetchReportData(giverRoleFilter);
+    };
 
     // Fetch all rounds to determine the "previous" round for comparison
     useEffect(() => {
@@ -493,71 +547,282 @@ function Reports() {
                 </div>
 
                 <div className="reports-actions">
-                    <button className="btn-export btn-pdf" onClick={handleExportPDF}>
-                        <InsertDriveFileIcon fontSize="small" /> Export PDF Report
-                    </button>
-                    <button className="btn-export btn-csv" onClick={handleExportCSV}>
-                        <DownloadIcon fontSize="small" /> Export CSV Data
-                    </button>
+                    {/* Export buttons removed from here to be moved below cards */}
                 </div>
             </div>
 
-            {/* Summary Cards */}
-            <div className="summary-cards">
-                <div className="summary-card card-rating">
-                    <div className="card-label">Overall Rating</div>
-                    <div className="card-value rating-value">
-                        {data.overallRating}
-                        <StarIcon className="star-icon" fontSize="large" sx={{ color: '#ffca28' }} />
-                    </div>
-                </div>
+            {/* Summary Cards Row — 3 separate cards */}
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
 
-                {comparisonData && prevRoundObj && comparisonData.isSamePerson && (
-                    <div className="summary-card card-improvement">
-                        <div className="card-label">Improvement vs {prevRoundName}</div>
-                        <div className="card-value">
-                            {renderImprovement(comparisonData.overallImprovement, true)}
+                {/* Card 1+2: Overall Report + Leadership Member in one card with vertical divider */}
+                <div style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    display: 'flex',
+                    alignItems: 'stretch',
+                    overflow: 'hidden',
+                    minWidth: '420px',
+                }}>
+                    {/* Left: Overall Report */}
+                    <div style={{
+                        padding: '20px 28px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        minWidth: '200px',
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <DescriptionIcon sx={{ color: '#0b5299', fontSize: 22 }} />
+                            <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b' }}>
+                                {selectedGiverRole ? `${selectedGiverRole} Report` : 'Overall Report'}
+                            </span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a' }}>{data.overallRating}</span>
+                            <StarIcon sx={{ color: '#facc15', fontSize: 28 }} />
+                            {comparisonData && prevRoundObj && comparisonData.isSamePerson && renderImprovement(comparisonData.overallImprovement, false)}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>Average Rating (Out of 5)</div>
+                        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                            <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a' }}>{data.responses}</span>
+                            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Total Responses</span>
                         </div>
                     </div>
-                )}
 
-                <div className="summary-card card-responses">
-                    <div className="card-label">Total Responses</div>
-                    <div className="card-value">{data.responses}</div>
-                </div>
-                <div className="summary-card card-role" style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                    <Avatar
-                        src={`https://info.aec.edu.in/aec/employeephotos/${data.empId}.jpg`}
-                        alt={data.targetPersonName}
-                        sx={{
-                            width: 64,
-                            height: 64,
-                            border: '2px solid #e2e8f0',
-                            bgcolor: '#f8fafc',
-                            color: '#014284',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                        }}
-                    >
-                        <PersonIcon sx={{ fontSize: 32, opacity: 0.5 }} />
-                    </Avatar>
-                    <div style={{ flex: 1 }}>
-                        <div className="card-label">Leadership Member</div>
-                        <div className="card-value" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                            <span style={{ fontSize: '0.95rem', color: '#0f172a', fontWeight: 800, lineHeight: 1.2 }}>
+                    {/* Vertical Divider */}
+                    <div style={{ width: '1px', background: '#e2e8f0', flexShrink: 0, alignSelf: 'stretch' }} />
+
+                    {/* Right: Leadership Member */}
+                    <div style={{
+                        padding: '20px 28px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                    }}>
+                        <Avatar
+                            src={`https://info.aec.edu.in/aec/employeephotos/${data.empId}.jpg`}
+                            alt={data.targetPersonName}
+                            sx={{
+                                width: 64,
+                                height: 64,
+                                border: '2px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#014284',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                flexShrink: 0
+                            }}
+                        >
+                            <PersonIcon sx={{ fontSize: 32, opacity: 0.5 }} />
+                        </Avatar>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Leadership Member</div>
+                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
                                 {toProperCase(data.targetPersonName) || "---"}
-                            </span>
-                            <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, marginTop: '4px', letterSpacing: '0.04em' }}>
                                 {displayRole}
-                            </span>
+                            </div>
                         </div>
                     </div>
                 </div>
+
+                {/* Parent card: Report Comparison by Role */}
+                <div style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    padding: '20px 24px',
+                    flex: 1,
+                    minWidth: '300px',
+                }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b', marginBottom: '2px' }}>Report Comparison by Role</div>
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '16px' }}>Breakdown of feedback by giver role</div>
+
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        {/* Overall (All Roles) */}
+                        {(() => {
+                            const isSelected = selectedGiverRole === null;
+                            return (
+                                <div
+                                    onClick={() => handleRoleCardClick(null)}
+                                    style={{
+                                        border: isSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0',
+                                        borderRadius: '10px',
+                                        padding: '14px 18px',
+                                        minWidth: '150px',
+                                        flex: 1,
+                                        background: isSelected ? '#eff6ff' : '#ffffff',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '2px',
+                                        cursor: 'pointer',
+                                        transition: 'border 0.2s, background 0.2s',
+                                    }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <div style={{
+                                            width: 36, height: 36, borderRadius: '50%',
+                                            background: '#3b82f618',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        }}>
+                                            <PersonIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                                        </div>
+                                        <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#3b82f6' }}>Overall (All Roles)</span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                        <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{data.overallRating}</span>
+                                        <StarIcon sx={{ color: '#facc15', fontSize: 22 }} />
+                                    </div>
+                                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '8px' }}>Average Rating (Out of 5)</div>
+                                    <div style={{ display: 'flex', gap: '20px' }}>
+                                        <div>
+                                            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{data.responses}</div>
+                                            <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Total Responses</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Faculty / HoD / Dean */}
+                        {(() => {
+                            const allRoles = [
+                                { label: 'Faculty', color: '#10b981', key: 'Faculty', giverKey: 'Faculty' },
+                                { label: 'HOD',     color: '#f97316', key: 'HOD',     giverKey: 'HOD' },
+                                { label: 'Dean',    color: '#8b5cf6', key: 'Dean',    giverKey: 'Dean' },
+                            ];
+
+                            const getVisibleGiverRoles = (targetRole) => {
+                                if (targetRole === 'hod') {
+                                    return allRoles.filter(r => r.giverKey === 'Faculty');
+                                }
+                                if (['dean_sob', 'dean_sos', 'dean_sop'].includes(targetRole)) {
+                                    return allRoles.filter(r => ['Faculty', 'Dean'].includes(r.giverKey));
+                                }
+                                // All other roles (Associate Deans, Higher Officials) see all
+                                return allRoles;
+                            };
+
+                            const visibleRoles = getVisibleGiverRoles(role);
+
+                            return visibleRoles.map(({ label, color, key, giverKey }) => {
+                                const stat = data.giverRoleStats?.[key] ?? { count: 0, avgRating: 0 };
+                                const count = typeof stat === 'object' ? (stat.count ?? 0) : stat;
+                                const avgRating = typeof stat === 'object' ? (stat.avgRating ?? 0) : 0;
+                                const isSelected = selectedGiverRole === giverKey;
+                                return (
+                                    <div key={key}
+                                        onClick={() => handleRoleCardClick(giverKey)}
+                                        style={{
+                                            border: isSelected ? `2px solid ${color}` : '1px solid #e2e8f0',
+                                            borderRadius: '10px',
+                                            padding: '14px 18px',
+                                            minWidth: '150px',
+                                            flex: 1,
+                                            background: isSelected ? color + '0f' : '#ffffff',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '2px',
+                                            cursor: 'pointer',
+                                            transition: 'border 0.2s, background 0.2s',
+                                        }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                            <div style={{
+                                                width: 36, height: 36, borderRadius: '50%',
+                                                background: color + '18',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            }}>
+                                                <PersonIcon sx={{ color, fontSize: 20 }} />
+                                            </div>
+                                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1e293b' }}>{label}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{avgRating.toFixed(2)}</span>
+                                            <StarIcon sx={{ color: '#facc15', fontSize: 22 }} />
+                                        </div>
+                                        <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '8px' }}>Average Rating (Out of 5)</div>
+                                        <div style={{ display: 'flex', gap: '20px' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{count}</div>
+                                                <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Total Responses</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        })()}
+                    </div>
+
+                    {/* Currently viewing bar and export buttons */}
+                    <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                        <div style={{ fontSize: '1.1rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 800 }}>
+                            <span style={{ opacity: 0.6, fontWeight: 500, fontSize: '0.9rem' }}>Currently Viewing:</span>
+                            <span style={{
+                                background: selectedGiverRole === null ? '#eff6ff' : (
+                                    selectedGiverRole === 'Faculty' ? '#ecfdf5' :
+                                    selectedGiverRole === 'HOD' ? '#fff7ed' : '#f5f3ff'
+                                ),
+                                color: selectedGiverRole === null ? '#2563eb' : (
+                                    selectedGiverRole === 'Faculty' ? '#059669' :
+                                    selectedGiverRole === 'HOD' ? '#ea580c' : '#7c3aed'
+                                ),
+                                border: `1px solid ${selectedGiverRole === null ? '#bfdbfe' : (
+                                    selectedGiverRole === 'Faculty' ? '#a7f3d0' :
+                                    selectedGiverRole === 'HOD' ? '#fed7aa' : '#ddd6fe'
+                                )}`,
+                                padding: '6px 20px',
+                                borderRadius: '30px',
+                                fontSize: '0.85rem',
+                                letterSpacing: '0.06em',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                            }}>
+                                {selectedGiverRole === null ? 'Overall Report' : `${selectedGiverRole} Report`}
+                            </span>
+                        </div>
+
+                        {/* Export Buttons relocated here */}
+                        <div className="reports-actions" style={{ display: 'flex', gap: '12px' }}>
+                            <button className="btn-export btn-pdf" onClick={handleExportPDF} style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: 700, borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <InsertDriveFileIcon fontSize="small" /> Export PDF Report
+                            </button>
+                            <button className="btn-export btn-csv" onClick={handleExportCSV} style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: 700, borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <DownloadIcon fontSize="small" /> Export CSV Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
+
+
+
+
 
             {/* Section Performance - Full Width */}
             <div className="content-section full-width-section" style={{ marginBottom: '24px' }}>
                 <div className="section-header-row">
-                    <h2 className="section-title">Section Performance</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <h2 className="section-title">Section Performance</h2>
+                        {/* Active filter badge */}
+                        <span style={{
+                            background: selectedGiverRole === null ? '#dbeafe' :
+                                selectedGiverRole === 'Faculty' ? '#d1fae5' :
+                                selectedGiverRole === 'HoD' ? '#ffedd5' : '#ede9fe',
+                            color: selectedGiverRole === null ? '#1d4ed8' :
+                                selectedGiverRole === 'Faculty' ? '#047857' :
+                                selectedGiverRole === 'HoD' ? '#c2410c' : '#6d28d9',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                            padding: '3px 10px',
+                            borderRadius: '20px',
+                            whiteSpace: 'nowrap',
+                        }}>
+                            Feedback given by: {giverRoleLabel}
+                        </span>
+                    </div>
                     <div className="performance-legend">
                         <div className="legend-scale-img"></div>
                         <div className="legend-labels">
@@ -569,6 +834,7 @@ function Reports() {
                         </div>
                     </div>
                 </div>
+
 
                 {data.responses === 0 ? (
                     <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>

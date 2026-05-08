@@ -116,45 +116,56 @@ export default function Header() {
           </Typography>
         </Box>
 
-        {/* Center Section - Aditya Logo (Only visible when logged in) */}
-        <Box
-          sx={{
-            display: user ? "flex" : "none",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "33%"
-          }}
-        >
-          <Box
-            component="img"
-            src={aus2}
-            alt="College Logo"
-            sx={{
-              display: { xs: "none", sm: "block" },
-              height: { sm: 55, md: 70 },
-            }}
-          />
-
-          <Box
-            component="img"
-            src={log2}
-            alt="College Logo"
-            sx={{
-              display: { xs: "block", sm: "none" },
-              height: 50,
-            }}
-          />
-        </Box>
+        {/* Center Section - Removed (Logo moved to right) */}
 
         {/* Right Section - Profile Icon (logged in) OR Feedback Logo (not logged in) */}
         <Box sx={{
           display: "flex",
           justifyContent: "flex-end",
           alignItems: "center",
-          width: "33%"
+          width: "66%"
         }}>
           {user ? (
             <>
+              {/* Aditya Logo moved here */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  mr: { xs: 1, sm: 3 }
+                }}
+              >
+                <Box
+                  component="img"
+                  src={aus2}
+                  alt="College Logo"
+                  sx={{
+                    display: { xs: "none", sm: "block" },
+                    height: { sm: 50, md: 60 },
+                  }}
+                />
+
+                <Box
+                  component="img"
+                  src={log2}
+                  alt="College Logo"
+                  sx={{
+                    display: { xs: "block", sm: "none" },
+                    height: 40,
+                  }}
+                />
+              </Box>
+
+              {/* Vertical Divider */}
+              <Box
+                sx={{
+                  height: { xs: 30, sm: 40 },
+                  width: "1px",
+                  backgroundColor: "rgba(255, 255, 255, 0.2)",
+                  mx: { xs: 0.5, sm: 1 }
+                }}
+              />
+
               <Tooltip title="Account settings">
                 <IconButton
                   onClick={handleClick}

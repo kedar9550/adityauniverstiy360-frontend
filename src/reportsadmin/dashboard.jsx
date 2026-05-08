@@ -595,67 +595,6 @@ function FeedbackDashboard() {
                 </Paper>
 
 
-                <Box sx={{ mb: 6 }}>
-                    <Typography
-                        variant="h5"
-                        component="div"
-                        sx={{
-                            fontWeight: 700,
-                            color: '#0f172a',
-                            mb: 3,
-                            pb: 2,
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 2
-                        }}
-                    >
-                        <Box sx={{ width: 4, height: 24, background: '#4facfe', borderRadius: 1 }} />
-                        Feedback Summary by Giver Role
-                    </Typography>
-
-                    <Grid container spacing={3}>
-                        {giverStats.length > 0 ? giverStats.map((stat, idx) => (
-                            <Grid item xs={12} sm={6} md={4} lg={3} key={idx}>
-                                <Paper
-                                    elevation={0}
-                                    sx={{
-                                        p: 3,
-                                        borderRadius: "20px",
-                                        background: "#ffffff",
-                                        border: "1px solid #e2e8f0",
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: 1,
-                                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
-                                        transition: 'transform 0.3s ease',
-                                        '&:hover': {
-                                            transform: 'translateY(-5px)',
-                                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)"
-                                        }
-                                    }}
-                                >
-                                    <Typography sx={{ color: '#64748b', fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        {stat.role === "Assoc Dean/Dean" ? "Deans" : stat.role}
-                                    </Typography>
-                                    <Typography variant="h4" sx={{ fontWeight: 800, color: '#014284' }}>
-                                        {stat.count}
-                                    </Typography>
-                                    <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 500 }}>
-                                        Feedbacks Submitted
-                                    </Typography>
-                                </Paper>
-                            </Grid>
-                        )) : (
-                            <Grid item xs={12}>
-                                <Typography sx={{ color: '#94a3b8', fontStyle: 'italic', textAlign: 'center' }}>
-                                    No giver role data available.
-                                </Typography>
-                            </Grid>
-                        )}
-                    </Grid>
-                </Box>
 
                 <Box sx={{ mb: 2 }}>
 
