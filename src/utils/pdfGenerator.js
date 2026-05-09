@@ -203,11 +203,11 @@ export const generateFeedbackReportPDF = (doc, config) => {
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 41, 59);
 
-    doc.text("==================================================", 14, startY);
+    //doc.text("==================================================", 14, startY);
     startY += 6;
     doc.text("SECTION PERFORMANCE", 14, startY);
     startY += 6;
-    doc.text("==================================================", 14, startY);
+    //doc.text("==================================================", 14, startY);
     startY += 8;
     doc.setFont("helvetica", "normal");
     doc.setTextColor(0, 0, 0);
@@ -249,11 +249,11 @@ export const generateFeedbackReportPDF = (doc, config) => {
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(30, 41, 59);
-    doc.text("==================================================", 14, startY);
+    //doc.text("==================================================", 14, startY);
     startY += 6;
     doc.text("QUESTION ANALYSIS", 14, startY);
     startY += 6;
-    doc.text("==================================================", 14, startY);
+    //doc.text("==================================================", 14, startY);
     startY += 8;
     doc.setFont("helvetica", "normal");
     doc.setTextColor(0, 0, 0);
@@ -317,11 +317,11 @@ export const generateFeedbackReportPDF = (doc, config) => {
         doc.setFontSize(14);
         doc.setFont("helvetica", "bold");
         doc.setTextColor(217, 119, 6);
-        doc.text("==================================================", 14, startY);
+        //doc.text("==================================================", 14, startY);
         startY += 6;
         doc.text("SUGGESTIONS", 14, startY);
         startY += 6;
-        doc.text("==================================================", 14, startY);
+        //doc.text("==================================================", 14, startY);
         startY += 8;
         doc.setFont("helvetica", "normal");
         doc.setTextColor(0, 0, 0);
