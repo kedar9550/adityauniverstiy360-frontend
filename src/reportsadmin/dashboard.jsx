@@ -10,7 +10,9 @@ import {
     Card,
     CardActionArea,
     Avatar,
-    useTheme
+    useTheme,
+    Button,
+    CircularProgress
 } from '@mui/material';
 import Grid from "@mui/material/Grid";
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -23,7 +25,11 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import StarsIcon from '@mui/icons-material/Stars';
 import PersonIcon from '@mui/icons-material/Person';
+import DownloadIcon from '@mui/icons-material/Download';
 import axios from 'axios';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { generateFeedbackReportPDF } from '../utils/pdfGenerator';
 
 const MotionCard = motion.create ? motion.create(Card) : motion(Card);
 const API_BASE_URL = `${import.meta.env.VITE_BACKEND_URL}/` || 'http://localhost:7000/';
@@ -282,7 +288,123 @@ function FeedbackDashboard() {
         return 0;
     });
 
+    const rolesWithFeedback = targetRoles.filter(
+        role => (dashboardStats.roleStats?.[role.id]?.totalFeedback || 0) > 0 || (dashboardStats.roleStats?.[role.roleKey]?.totalFeedback || 0) > 0
+    );
+
     const [isNavigating, setIsNavigating] = useState(false);
+    const [isDownloadingAll, setIsDownloadingAll] = useState(false);
+
+    const handleDownloadAllReports = async () => {
+        if (rolesWithFeedback.length === 0) return;
+        setIsDownloadingAll(true);
+        try {
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const selectedSchool = schoolsData.find(s => s._id === schoolId);
+            let isFirstPage = true;
+
+            // Determine previousRoundId
+            let previousRoundId = null;
+            if (roundId && roundsData.length > 1) {
+                const currentIndex = roundsData.findIndex(r => r._id === roundId);
+                if (currentIndex !== -1 && currentIndex + 1 < roundsData.length) {
+                    previousRoundId = roundsData[currentIndex + 1]._id;
+                }
+            }
+
+            // Fetch and append data for each role sequentially
+            for (let i = 0; i < rolesWithFeedback.length; i++) {
+                const role = rolesWithFeedback[i];
+                let activeDeptId = role.departmentId || departmentId;
+                if (activeDeptId === 'all') activeDeptId = '';
+                const activeDept = departmentsData.find(d => d._id === activeDeptId) ||
+                    (role.departmentId ? { _id: role.departmentId, name: role.departmentName, code: role.departmentCode } : null);
+
+                const params = { role: role.roleKey };
+                if (selectedSchool) params.school = selectedSchool._id;
+                if (activeDept) params.department = activeDept._id;
+                if (roundId && roundId !== 'all') params.roundId = roundId;
+
+                // Fetch overall report
+                const response = await axios.get(`${API_BASE_URL}feedback360/reports`, { params });
+                const overallReport = response.data;
+                if (!overallReport || overallReport.responses === 0) continue;
+
+                let overallCompare = null;
+                if (previousRoundId) {
+                    try {
+                        const compParams = { round1: previousRoundId, round2: roundId, role: role.roleKey };
+                        if (selectedSchool) compParams.school = selectedSchool._id;
+                        if (activeDept) compParams.department = activeDept._id;
+                        const compRes = await axios.get(`${API_BASE_URL}feedback360/reports/compare`, { params: compParams });
+                        overallCompare = compRes.data;
+                    } catch (e) {
+                        console.error("Comparison fetch error", e);
+                    }
+                }
+
+                const memberData = {
+                    roleKey: role.roleKey,
+                    roleTitle: role.title,
+                    targetPersonName: overallReport.targetPersonName,
+                    overall: { reportData: overallReport, comparisonData: overallCompare },
+                    roleWise: {}
+                };
+
+                // Fetch role-wise data
+                if (overallReport.giverRoleStats) {
+                    const roles = Object.keys(overallReport.giverRoleStats);
+                    await Promise.all(roles.map(async (r) => {
+                        if (role.roleKey === 'hod' && r.toLowerCase() === 'faculty') return;
+                        try {
+                            const rParams = { ...params, giverRole: r };
+                            const rRes = await axios.get(`${API_BASE_URL}feedback360/reports`, { params: rParams });
+                            
+                            let rCompare = null;
+                            if (previousRoundId) {
+                                const cParams = { round1: previousRoundId, round2: roundId, role: role.roleKey, giverRole: r };
+                                if (selectedSchool) cParams.school = selectedSchool._id;
+                                if (activeDept) cParams.department = activeDept._id;
+                                const cRes = await axios.get(`${API_BASE_URL}feedback360/reports/compare`, { params: cParams });
+                                rCompare = cRes.data;
+                            }
+                            
+                            memberData.roleWise[r] = { reportData: rRes.data, comparisonData: rCompare };
+                        } catch (e) {
+                            console.error(`Error fetching role ${r}`, e);
+                        }
+                    }));
+                }
+
+                const currentRoundObj = roundsData.find(r => r._id === roundId);
+                const prevRoundObj = roundsData.find(r => r._id === previousRoundId);
+
+                generateFeedbackReportPDF(doc, {
+                    memberData,
+                    isFirstPage,
+                    pageWidth,
+                    selectedSchool,
+                    activeDept,
+                    currentRoundObj,
+                    prevRoundObj
+                });
+                
+                isFirstPage = false;
+            }
+            
+            if (!isFirstPage) { // at least one page was added
+                doc.save('All_Leadership_Reports.pdf');
+            } else {
+                alert("No valid reports found to download.");
+            }
+        } catch (error) {
+            console.error("Error downloading all reports:", error);
+            alert("Failed to download reports. Please try again.");
+        } finally {
+            setIsDownloadingAll(false);
+        }
+    };
 
     const handleRoleClick = async (role) => {
         setIsNavigating(true);
@@ -327,10 +449,6 @@ function FeedbackDashboard() {
             alert("Failed to fetch reports. Please try again.");
         }
     };
-
-    const rolesWithFeedback = targetRoles.filter(
-        role => (dashboardStats.roleStats?.[role.id]?.totalFeedback || 0) > 0 || (dashboardStats.roleStats?.[role.roleKey]?.totalFeedback || 0) > 0
-    );
 
     return (
         <Box
@@ -598,23 +716,53 @@ function FeedbackDashboard() {
 
                 <Box sx={{ mb: 2 }}>
 
-                    <Typography
-                        variant="h5"
-                        component="div"
-                        sx={{
-                            fontWeight: 700,
-                            color: '#0f172a',
-                            mb: 3,
-                            pb: 2,
-                            borderBottom: '1px solid #e2e8f0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 2
-                        }}
-                    >
-                        <Box sx={{ width: 4, height: 24, background: '#f59e0b', borderRadius: 1 }} />
-                        {dashboardStats.totalFeedback === 0 ? "No Feedback Data Available" : "View leadership reports"}
-                    </Typography>
+                    <Box sx={{
+                        mb: 3,
+                        pb: 2,
+                        borderBottom: '1px solid #e2e8f0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 2
+                    }}>
+                        <Typography
+                            variant="h5"
+                            component="div"
+                            sx={{
+                                fontWeight: 700,
+                                color: '#0f172a',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 2
+                            }}
+                        >
+                            <Box sx={{ width: 4, height: 24, background: '#f59e0b', borderRadius: 1 }} />
+                            {dashboardStats.totalFeedback === 0 ? "No Feedback Data Available" : "View leadership reports"}
+                        </Typography>
+
+                        {dashboardStats.totalFeedback > 0 && rolesWithFeedback.length > 0 && (
+                            <Button
+                                variant="contained"
+                                onClick={handleDownloadAllReports}
+                                disabled={isDownloadingAll}
+                                startIcon={isDownloadingAll ? <CircularProgress size={20} color="inherit" /> : <DownloadIcon />}
+                                sx={{
+                                    backgroundColor: '#014284',
+                                    color: 'white',
+                                    fontWeight: 600,
+                                    borderRadius: '8px',
+                                    textTransform: 'none',
+                                    boxShadow: '0 4px 6px -1px rgba(1, 66, 132, 0.2)',
+                                    '&:hover': {
+                                        backgroundColor: '#035cb9',
+                                    }
+                                }}
+                            >
+                                {isDownloadingAll ? 'Generating PDF...' : 'Download All Reports'}
+                            </Button>
+                        )}
+                    </Box>
 
                     {dashboardStats.totalFeedback === 0 ? (
 

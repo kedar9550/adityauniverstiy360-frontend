@@ -13,6 +13,9 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
+import { generateFeedbackReportPDF } from '../utils/pdfGenerator';
+import { motion } from 'framer-motion';
+import { Button } from '@mui/material';
 
 const API_BASE_URL = `${import.meta.env.VITE_BACKEND_URL}/` || 'http://localhost:7000/';
 
@@ -137,6 +140,8 @@ function Reports() {
     const [comparisonData, setComparisonData] = useState(null);
     const [roundsList, setRoundsList] = useState([]);
     const [previousRoundId, setPreviousRoundId] = useState(null);
+    const [departmentsData, setDepartmentsData] = useState([]);
+    const [schoolsData, setSchoolsData] = useState([]);
 
     // Derive Context Elements
     const currentRoundObj = roundsList.find(r => r._id === roundId);
@@ -181,11 +186,11 @@ function Reports() {
         if (roundDisplayString) {
             csvContent += `Round Details,${escapeCsv(roundDisplayString)}\n`;
         }
-        if (data.targetPersonName) {
-            csvContent += `Member Name,${escapeCsv(data.targetPersonName)}\n`;
+        csvContent += `Role Filter,${escapeCsv(giverRoleLabel)}\n`;
+        if (data.mainTargetPersonName || data.targetPersonName) {
+            csvContent += `Member Name,${escapeCsv(data.mainTargetPersonName ?? data.targetPersonName)}\n`;
         }
         csvContent += `Designation,${escapeCsv(displayRole)}\n`;
-        csvContent += `Giver Role Filter,${escapeCsv(giverRoleLabel)}\n`;
         csvContent += `Overall Rating,${escapeCsv(data.overallRating)}\n`;
         if (comparisonData && prevRoundObj && comparisonData.isSamePerson) {
             const sign = comparisonData.overallImprovement > 0 ? '+' : '';
@@ -205,12 +210,19 @@ function Reports() {
             csvContent += "\n";
         }
 
-        if (data.sections && data.sections.length > 0) {
-            const filteredSections = data.sections.filter(item => !item.section?.toLowerCase().includes('open ended') && !item.section?.toLowerCase().includes('open-ended'));
+        // Section Performance
+        if (filteredSections.length > 0) {
             csvContent += "Section Performance\n";
-            csvContent += "Section,Average Rating\n";
+            csvContent += "Section,Average Rating,Improvement\n";
             filteredSections.forEach(sec => {
-                csvContent += `${escapeCsv(sec.section)},${escapeCsv(sec.avgRating)}\n`;
+                let impText = "";
+                if (comparisonData && comparisonData.isSamePerson && sec.improvement !== undefined) {
+                    const val = sec.improvement;
+                    if (Math.abs(val) > 0) {
+                        impText = val > 0 ? `+${val.toFixed(2)}` : `${val.toFixed(2)}`;
+                    }
+                }
+                csvContent += `${escapeCsv(sec.section)},${escapeCsv(sec.avgRating.toFixed(2))},${escapeCsv(impText)}\n`;
             });
             csvContent += "\n";
         }
@@ -257,135 +269,93 @@ function Reports() {
         URL.revokeObjectURL(url);
     };
 
-    const handleExportPDF = () => {
-        if (!data) return;
+    const [isExporting, setIsExporting] = useState(false);
 
-        const doc = new jsPDF();
-        const pageWidth = doc.internal.pageSize.getWidth();
+    const handleExportPDF = async () => {
+        if (!data || isExporting) return;
+        setIsExporting(true);
 
-        // Title
-        doc.setFontSize(16);
-        doc.text('Feedback Report', pageWidth / 2, 15, { align: 'center' });
+        try {
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
 
-        doc.setFontSize(12);
-        // Info Block
-        let yPos = 25;
-        if (roundDisplayString) {
-            doc.text(`${roundDisplayString}`, 14, yPos);
-            yPos += 7;
-        }
-        doc.text(`Scope: ${scopeDisplayString}`, 14, yPos);
-        yPos += 7;
-        if (data.targetPersonName) {
-            doc.text(`Member Name: ${data.targetPersonName}`, 14, yPos);
-            yPos += 7;
-        }
-        doc.text(`Designation: ${displayRole}`, 14, yPos);
-        yPos += 7;
-        doc.text(`Giver Role Filter: ${giverRoleLabel}`, 14, yPos);
-        yPos += 7;
-        doc.text(`Overall Rating: ${data.overallRating}`, 14, yPos);
-        yPos += 7;
+            // Fetch overall data
+            const params = { role };
+            if (school) params.school = school;
+            if (department) params.department = department;
+            if (roundId) params.roundId = roundId;
 
-        if (comparisonData && prevRoundObj && comparisonData.isSamePerson) {
-            const sign = comparisonData.overallImprovement > 0 ? '+' : '';
-            doc.text(`Improvement vs ${prevRoundName}: ${sign}${comparisonData.overallImprovement.toFixed(2)}`, 14, yPos);
-            yPos += 7;
-        }
+            const overallRes = await axios.get(`${API_BASE_URL}feedback360/reports`, { params });
+            const overallReport = overallRes.data;
 
-        doc.text(`Total Responses: ${data.responses}`, 14, yPos);
-        yPos += 7;
-
-        // Responses by Role table in PDF
-        if (data.giverRoleStats) {
-            doc.setFontSize(12);
-            doc.text('Responses by Giver Role:', 14, yPos);
-            yPos += 4;
-            autoTable(doc, {
-                startY: yPos,
-                head: [['Role', 'Count', 'Avg Rating']],
-                body: Object.entries(data.giverRoleStats).map(([key, val]) => [
-                    key,
-                    typeof val === 'object' ? (val.count ?? 0) : val,
-                    typeof val === 'object' ? (val.avgRating ?? 0).toFixed(2) : '0.00'
-                ]),
-                theme: 'grid',
-                styles: { fontSize: 9 },
-                headStyles: { fillColor: [1, 66, 132] },
-            });
-            yPos = doc.lastAutoTable.finalY + 8;
-        }
-
-        let startY = yPos + 2;
-
-        // Section Performance
-        if (data.sections && data.sections.length > 0) {
-            const filteredSectionsList = data.sections.filter(item => !item.section?.toLowerCase().includes('open ended') && !item.section?.toLowerCase().includes('open-ended'));
-            if (filteredSectionsList.length > 0) {
-                doc.setFontSize(14);
-                doc.text('Section Performance', 14, startY);
-                autoTable(doc, {
-                    startY: startY + 5,
-                    head: [['Section', 'Average Rating']],
-                    body: filteredSectionsList.map(sec => [sec.section, sec.avgRating.toFixed(2)]),
-                    theme: 'grid',
-                });
-                startY = doc.lastAutoTable.finalY + 15;
+            let overallCompare = null;
+            if (previousRoundId) {
+                try {
+                    const compParams = { round1: previousRoundId, round2: roundId, role };
+                    if (school) compParams.school = school;
+                    if (department) compParams.department = department;
+                    const cRes = await axios.get(`${API_BASE_URL}feedback360/reports/compare`, { params: compParams });
+                    overallCompare = cRes.data;
+                } catch (e) { console.error("Compare error", e); }
             }
-        }
 
-        // Question Analysis
-        if (filteredQuestions.length > 0) {
-            doc.setFontSize(14);
-            doc.text('Question Analysis', 14, startY);
-            autoTable(doc, {
-                startY: startY + 5,
-                head: [['Section', 'Question', 'Average Rating', 'Improvement']],
-                body: filteredQuestions.map(q => {
+            const memberData = {
+                roleKey: role,
+                roleTitle: displayRole,
+                targetPersonName: data.mainTargetPersonName || data.targetPersonName || overallReport.targetPersonName,
+                overall: { reportData: overallReport, comparisonData: overallCompare },
+                roleWise: {}
+            };
 
-                    const compItem = comparisonMap[String(q.questionId)];
-
-                    let improvement = "";
-                    if (compItem && comparisonData.isSamePerson) {
-                        const val = compItem.improvement;
-                        improvement =
-                            val > 0
-                                ? `+${val.toFixed(2)}`
-                                : val < 0
-                                    ? `${val.toFixed(2)}`
-                                    : "0.00";
+            // Fetch role-wise data dynamically based on giverRoleStats
+            if (overallReport.giverRoleStats) {
+                const roles = Object.keys(overallReport.giverRoleStats);
+                await Promise.all(roles.map(async (r) => {
+                    if (role === 'hod' && r.toLowerCase() === 'faculty') return; // skip
+                    try {
+                        const rParams = { ...params, giverRole: r };
+                        const rRes = await axios.get(`${API_BASE_URL}feedback360/reports`, { params: rParams });
+                        
+                        let rCompare = null;
+                        if (previousRoundId) {
+                            const cParams = { round1: previousRoundId, round2: roundId, role, giverRole: r };
+                            if (school) cParams.school = school;
+                            if (department) cParams.department = department;
+                            const cRes = await axios.get(`${API_BASE_URL}feedback360/reports/compare`, { params: cParams });
+                            rCompare = cRes.data;
+                        }
+                        
+                        memberData.roleWise[r] = { reportData: rRes.data, comparisonData: rCompare };
+                    } catch (e) {
+                        console.error(`Error fetching role ${r}`, e);
                     }
+                }));
+            }
 
-                    return [
-                        q.section || 'General',
-                        q.question,
-                        q.avgRating.toFixed(2),
-                        improvement
-                    ];
-                }),
-                theme: 'grid',
+            const currentRoundObj = roundsList.find(r => r._id === roundId);
+            const prevRoundObj = roundsList.find(r => r._id === previousRoundId);
+            const activeDeptObj = departmentsData ? departmentsData.find(d => d._id === department) : null;
+            const selectedSchoolObj = schoolsData ? schoolsData.find(s => s._id === school) : null;
+
+            generateFeedbackReportPDF(doc, {
+                memberData,
+                isFirstPage: true,
+                pageWidth,
+                selectedSchool: selectedSchoolObj,
+                activeDept: activeDeptObj,
+                currentRoundObj,
+                prevRoundObj
             });
-            startY = doc.lastAutoTable.finalY + 15;
-        }
 
-        // Faculty Suggestions
-        if (data.suggestions && data.suggestions.length > 0) {
-            doc.setFontSize(14);
-            doc.text('Faculty Suggestions', 14, startY);
-            autoTable(doc, {
-                startY: startY + 5,
-                head: [['Question', 'Comments']],
-                body: data.suggestions.map(sug => {
-                    const comments = sug.answers && sug.answers.length > 0 ? sug.answers.join(" | ") : "No comments";
-                    return [sug.question, comments];
-                }),
-                theme: 'grid',
-            });
+            const sanitizedRole = displayRole.replace(/\s+/g, '_');
+            doc.save(`360_Feedback_Report_${sanitizedRole}.pdf`);
+            
+        } catch (error) {
+            console.error("Export error", error);
+            alert("Failed to export PDF.");
+        } finally {
+            setIsExporting(false);
         }
-
-        const sanitizedRole = displayRole.replace(/\s+/g, '_');
-        const sanitizedGiverPDF = giverRoleLabel.replace(/[^a-zA-Z0-9]/g, '_');
-        doc.save(`Feedback_Report_${sanitizedRole}_${sanitizedGiverPDF}.pdf`);
     };
 
     const fetchReportData = React.useCallback((giverRoleFilter) => {
@@ -401,7 +371,11 @@ function Reports() {
                 setData(prev => ({
                     ...res.data,
                     // Always preserve the top-level giverRoleStats from the Overall fetch
-                    giverRoleStats: giverRoleFilter ? prev?.giverRoleStats : res.data.giverRoleStats
+                    giverRoleStats: giverRoleFilter ? prev?.giverRoleStats : res.data.giverRoleStats,
+                    mainOverallRating: giverRoleFilter ? prev?.mainOverallRating : res.data.overallRating,
+                    mainResponses: giverRoleFilter ? prev?.mainResponses : res.data.responses,
+                    mainTargetPersonName: giverRoleFilter ? prev?.mainTargetPersonName : res.data.targetPersonName,
+                    mainEmpId: giverRoleFilter ? prev?.mainEmpId : res.data.empId
                 }));
                 setLoading(false);
             })
@@ -468,12 +442,25 @@ function Reports() {
             item =>
                 !item.section?.toLowerCase().includes("open ended") &&
                 !item.section?.toLowerCase().includes("open-ended")
-        )
+        ).map(sectionObj => {
+            const sectionQuestions = data.questions ? data.questions.filter(q => q.section === sectionObj.section) : [];
+            let totalImp = 0;
+            let impCount = 0;
+            sectionQuestions.forEach(q => {
+                const compItem = comparisonMap[String(q.questionId)];
+                if (compItem && Math.abs(compItem.improvement) > 0) {
+                    totalImp += compItem.improvement;
+                    impCount++;
+                }
+            });
+            const improvement = impCount > 0 ? (totalImp / impCount) : 0;
+            return { ...sectionObj, improvement };
+        })
         : [];
 
     const chartHeight = Math.max(filteredSections.length * 60 + 50, 200);
 
-    if (loading) {
+    if (loading && !data) {
         return (
             <div className="reports-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#014284' }}>
                 <h2>Loading Report Data...</h2>
@@ -506,7 +493,7 @@ function Reports() {
     };
 
     return (
-        <div className="reports-container">
+        <div className="reports-container" style={{ opacity: loading ? 0.5 : 1, pointerEvents: loading ? 'none' : 'auto', transition: 'opacity 0.2s' }}>
             {/* Breadcrumb */}
             <div className="reports-breadcrumb">
                 <div
@@ -540,9 +527,9 @@ function Reports() {
                                 {roundDisplayString}
                             </span>
                         )}
-                        <span className="subtitle-text" style={{ fontWeight: 600 }}>
+                        {/* <span className="subtitle-text" style={{ fontWeight: 600 }}>
                             {scopeDisplayString}
-                        </span>
+                        </span> */}
                     </div>
                 </div>
 
@@ -568,17 +555,17 @@ function Reports() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                             <DescriptionIcon sx={{ color: '#0b5299', fontSize: 22 }} />
                             <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b' }}>
-                                {selectedGiverRole ? `${selectedGiverRole} Report` : 'Overall Report'}
+                                Overall Report
                             </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a' }}>{data.overallRating}</span>
+                            <span style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a' }}>{data.mainOverallRating ?? data.overallRating}</span>
                             <StarIcon sx={{ color: '#facc15', fontSize: 28 }} />
                             {comparisonData && prevRoundObj && comparisonData.isSamePerson && renderImprovement(comparisonData.overallImprovement, false)}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>Average Rating (Out of 5)</div>
                         <div style={{ marginTop: '8px', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                            <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a' }}>{data.responses}</span>
+                            <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a' }}>{data.mainResponses ?? data.responses}</span>
                             <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Total Responses</span>
                         </div>
                     </div>
@@ -594,8 +581,8 @@ function Reports() {
                         gap: '16px',
                     }}>
                         <Avatar
-                            src={`https://info.aec.edu.in/aec/employeephotos/${data.empId}.jpg`}
-                            alt={data.targetPersonName}
+                            src={`https://info.aec.edu.in/aec/employeephotos/${data.mainEmpId ?? data.empId}.jpg`}
+                            alt={data.mainTargetPersonName ?? data.targetPersonName}
                             sx={{
                                 width: 64,
                                 height: 64,
@@ -611,7 +598,7 @@ function Reports() {
                         <div>
                             <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Leadership Member</div>
                             <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                                {toProperCase(data.targetPersonName) || "---"}
+                                {toProperCase(data.mainTargetPersonName ?? data.targetPersonName) || "---"}
                             </div>
                             <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, marginTop: '4px', letterSpacing: '0.04em' }}>
                                 {displayRole}
@@ -630,8 +617,8 @@ function Reports() {
                     flex: 1,
                     minWidth: '300px',
                 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b', marginBottom: '2px' }}>Report Comparison by Role</div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '16px' }}>Breakdown of feedback by giver role</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b', marginBottom: '2px' }}>Report by Role</div>
+                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '16px' }}>Breakdown of feedback</div>
 
                     <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                         {/* Overall (All Roles) */}
@@ -664,13 +651,13 @@ function Reports() {
                                         <span style={{ fontWeight: 700, fontSize: '0.85rem', color: '#3b82f6' }}>Overall (All Roles)</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                        <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{data.overallRating}</span>
+                                        <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{data.mainOverallRating ?? data.overallRating}</span>
                                         <StarIcon sx={{ color: '#facc15', fontSize: 22 }} />
                                     </div>
                                     <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '8px' }}>Average Rating (Out of 5)</div>
                                     <div style={{ display: 'flex', gap: '20px' }}>
                                         <div>
-                                            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{data.responses}</div>
+                                            <div style={{ fontWeight: 700, fontSize: '1rem', color: '#0f172a' }}>{data.mainResponses ?? data.responses}</div>
                                             <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Total Responses</div>
                                         </div>
                                     </div>
@@ -682,8 +669,8 @@ function Reports() {
                         {(() => {
                             const allRoles = [
                                 { label: 'Faculty', color: '#10b981', key: 'Faculty', giverKey: 'Faculty' },
-                                { label: 'HOD',     color: '#f97316', key: 'HOD',     giverKey: 'HOD' },
-                                { label: 'Dean',    color: '#8b5cf6', key: 'Dean',    giverKey: 'Dean' },
+                                { label: 'HOD', color: '#f97316', key: 'HOD', giverKey: 'HOD' },
+                                { label: 'Dean', color: '#8b5cf6', key: 'Dean', giverKey: 'Dean' },
                             ];
 
                             const getVisibleGiverRoles = (targetRole) => {
@@ -731,8 +718,8 @@ function Reports() {
                                             <span style={{ fontWeight: 600, fontSize: '0.85rem', color: '#1e293b' }}>{label}</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                            <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{avgRating.toFixed(2)}</span>
-                                            <StarIcon sx={{ color: '#facc15', fontSize: 22 }} />
+                                            <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0f172a' }}>{count > 0 ? avgRating.toFixed(2) : "---"}</span>
+                                            <StarIcon sx={{ color: count > 0 ? '#facc15' : '#cbd5e1', fontSize: 22 }} />
                                         </div>
                                         <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '8px' }}>Average Rating (Out of 5)</div>
                                         <div style={{ display: 'flex', gap: '20px' }}>
@@ -754,15 +741,15 @@ function Reports() {
                             <span style={{
                                 background: selectedGiverRole === null ? '#eff6ff' : (
                                     selectedGiverRole === 'Faculty' ? '#ecfdf5' :
-                                    selectedGiverRole === 'HOD' ? '#fff7ed' : '#f5f3ff'
+                                        selectedGiverRole === 'HOD' ? '#fff7ed' : '#f5f3ff'
                                 ),
                                 color: selectedGiverRole === null ? '#2563eb' : (
                                     selectedGiverRole === 'Faculty' ? '#059669' :
-                                    selectedGiverRole === 'HOD' ? '#ea580c' : '#7c3aed'
+                                        selectedGiverRole === 'HOD' ? '#ea580c' : '#7c3aed'
                                 ),
                                 border: `1px solid ${selectedGiverRole === null ? '#bfdbfe' : (
                                     selectedGiverRole === 'Faculty' ? '#a7f3d0' :
-                                    selectedGiverRole === 'HOD' ? '#fed7aa' : '#ddd6fe'
+                                        selectedGiverRole === 'HOD' ? '#fed7aa' : '#ddd6fe'
                                 )}`,
                                 padding: '6px 20px',
                                 borderRadius: '30px',
@@ -776,12 +763,24 @@ function Reports() {
 
                         {/* Export Buttons relocated here */}
                         <div className="reports-actions" style={{ display: 'flex', gap: '12px' }}>
-                            <button className="btn-export btn-pdf" onClick={handleExportPDF} style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: 700, borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <InsertDriveFileIcon fontSize="small" /> Export PDF Report
-                            </button>
-                            <button className="btn-export btn-csv" onClick={handleExportCSV} style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: 700, borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <DownloadIcon fontSize="small" /> Export CSV Data
-                            </button>
+                            <Button
+                                variant="contained"
+                                onClick={handleExportPDF}
+                                disabled={isExporting}
+                                sx={{
+                                    backgroundColor: '#014284',
+                                    color: 'white',
+                                    fontWeight: 600,
+                                    borderRadius: '8px',
+                                    textTransform: 'none',
+                                    boxShadow: '0 4px 6px -1px rgba(1, 66, 132, 0.2)',
+                                    '&:hover': {
+                                        backgroundColor: '#035cb9',
+                                    }
+                                }}
+                            >
+                                {isExporting ? "Generating PDF..." : "Export PDF Report"}
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -796,23 +795,27 @@ function Reports() {
             <div className="content-section full-width-section" style={{ marginBottom: '24px' }}>
                 <div className="section-header-row">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                        <h2 className="section-title">Section Performance</h2>
-                        {/* Active filter badge */}
-                        <span style={{
-                            background: selectedGiverRole === null ? '#dbeafe' :
-                                selectedGiverRole === 'Faculty' ? '#d1fae5' :
-                                selectedGiverRole === 'HoD' ? '#ffedd5' : '#ede9fe',
-                            color: selectedGiverRole === null ? '#1d4ed8' :
-                                selectedGiverRole === 'Faculty' ? '#047857' :
-                                selectedGiverRole === 'HoD' ? '#c2410c' : '#6d28d9',
-                            fontWeight: 600,
-                            fontSize: '0.75rem',
-                            padding: '3px 10px',
-                            borderRadius: '20px',
-                            whiteSpace: 'nowrap',
-                        }}>
-                            Feedback given by: {giverRoleLabel}
-                        </span>
+                        <h2 className="section-title" style={{ marginBottom: 0 }}>
+                            Section Performance
+                            <span style={{
+                                background: selectedGiverRole === null ? '#dbeafe' :
+                                    selectedGiverRole === 'Faculty' ? '#d1fae5' :
+                                        selectedGiverRole === 'HOD' ? '#ffedd5' : '#ede9fe',
+                                color: selectedGiverRole === null ? '#1d4ed8' :
+                                    selectedGiverRole === 'Faculty' ? '#047857' :
+                                        selectedGiverRole === 'HOD' ? '#c2410c' : '#6d28d9',
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                                padding: '4px 12px',
+                                borderRadius: '20px',
+                                whiteSpace: 'nowrap',
+                                marginLeft: '8px',
+                                letterSpacing: '0.02em',
+                                border: '1px solid currentColor'
+                            }}>
+                                {selectedGiverRole ? `${selectedGiverRole} Report` : 'Overall Report'}
+                            </span>
+                        </h2>
                     </div>
                     <div className="performance-legend">
                         <div className="legend-scale-img"></div>
@@ -837,7 +840,7 @@ function Reports() {
                             <BarChart
                                 data={filteredSections}
                                 layout="vertical"
-                                margin={{ top: 5, right: 60, left: 10, bottom: 20 }}
+                                margin={{ top: 5, right: 90, left: 10, bottom: 20 }}
                             >
                                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={true} stroke="#f1f5f9" />
                                 <XAxis
@@ -865,7 +868,27 @@ function Reports() {
                                     {filteredSections.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={getPremiumColor(entry.avgRating)} />
                                     ))}
-                                    <LabelList dataKey="avgRating" position="right" formatter={(val) => parseFloat(val).toFixed(2)} style={{ fill: '#475569', fontSize: 13, fontWeight: 600 }} />
+                                    <LabelList 
+                                        dataKey="avgRating" 
+                                        content={(props) => {
+                                            const { x, y, width, height, value, index } = props;
+                                            const section = filteredSections[index];
+                                            const imp = section.improvement;
+                                            
+                                            return (
+                                                <g>
+                                                    <text x={x + width + 10} y={y + height / 2 + 5} fill="#475569" fontSize="13" fontWeight="600">
+                                                        {parseFloat(value).toFixed(2)}
+                                                    </text>
+                                                    {comparisonData && comparisonData.isSamePerson && Math.abs(imp) > 0 && (
+                                                        <text x={x + width + 42} y={y + height / 2 + 5} fill={imp > 0 ? '#16a34a' : '#dc2626'} fontSize="12" fontWeight="700">
+                                                            {imp > 0 ? '▲' : '▼'} {Math.abs(imp).toFixed(2)}
+                                                        </text>
+                                                    )}
+                                                </g>
+                                            );
+                                        }} 
+                                    />
                                 </Bar>
                             </BarChart>
                         </ResponsiveContainer>
