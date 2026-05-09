@@ -4,6 +4,7 @@ import Avatar from '@mui/material/Avatar';
 import PersonIcon from '@mui/icons-material/Person';
 import './reports.css';
 import HomeIcon from '@mui/icons-material/Home';
+import GroupIcon from '@mui/icons-material/Group';
 import DownloadIcon from '@mui/icons-material/Download';
 import StarIcon from '@mui/icons-material/Star';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -315,7 +316,7 @@ function Reports() {
                     try {
                         const rParams = { ...params, giverRole: r };
                         const rRes = await axios.get(`${API_BASE_URL}feedback360/reports`, { params: rParams });
-                        
+
                         let rCompare = null;
                         if (previousRoundId) {
                             const cParams = { round1: previousRoundId, round2: roundId, role, giverRole: r };
@@ -324,7 +325,7 @@ function Reports() {
                             const cRes = await axios.get(`${API_BASE_URL}feedback360/reports/compare`, { params: cParams });
                             rCompare = cRes.data;
                         }
-                        
+
                         memberData.roleWise[r] = { reportData: rRes.data, comparisonData: rCompare };
                     } catch (e) {
                         console.error(`Error fetching role ${r}`, e);
@@ -349,7 +350,7 @@ function Reports() {
 
             const sanitizedRole = displayRole.replace(/\s+/g, '_');
             doc.save(`360_Feedback_Report_${sanitizedRole}.pdf`);
-            
+
         } catch (error) {
             console.error("Export error", error);
             alert("Failed to export PDF.");
@@ -542,68 +543,129 @@ function Reports() {
             <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
 
                 {/* Card 1+2: Overall Report + Leadership Member in one card with vertical divider */}
-                <div className="leadership-summary-card">
-                    {/* Left: Overall Report */}
-                    <div style={{
-                        padding: '20px 28px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        gap: '4px',
-                        minWidth: '200px',
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                            <DescriptionIcon sx={{ color: '#0b5299', fontSize: 22 }} />
-                            <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1e293b' }}>
-                                Overall Report
-                            </span>
+                <div className="leadership-summary-card" style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: '350px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+                    {/* Top: Title */}
+                    <div style={{ padding: '20px 24px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ backgroundColor: '#eff6ff', padding: '6px', borderRadius: '8px', display: 'flex' }}>
+                            <DescriptionIcon sx={{ color: '#2563eb', fontSize: 20 }} />
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a' }}>{data.mainOverallRating ?? data.overallRating}</span>
-                            <StarIcon sx={{ color: '#facc15', fontSize: 28 }} />
-                            {comparisonData && prevRoundObj && comparisonData.isSamePerson && renderImprovement(comparisonData.overallImprovement, false)}
+                        <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#1e293b' }}>
+                            Overall Report
+                        </span>
+                    </div>
+
+                    {/* Middle: Gauge and Profile */}
+                    <div style={{ display: 'flex', padding: '24px 24px', alignItems: 'center', justifyContent: 'center', gap: '32px', flexWrap: 'wrap' }}>
+                        {/* Gauge */}
+                        <div style={{ position: 'relative', width: 140, height: 140, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="140" height="140" viewBox="0 0 140 140" style={{ transform: 'rotate(135deg)', position: 'absolute' }}>
+                                <circle
+                                    stroke="#e2e8f0"
+                                    fill="transparent"
+                                    strokeWidth="8"
+                                    strokeDasharray="311.01 103.67"
+                                    strokeDashoffset="0"
+                                    strokeLinecap="round"
+                                    r="66"
+                                    cx="70"
+                                    cy="70"
+                                />
+                                <circle
+                                    stroke="#3b82f6"
+                                    fill="transparent"
+                                    strokeWidth="8"
+                                    strokeDasharray={`${311.01 * ((data.mainOverallRating ?? data.overallRating) / 5)} 414.69`}
+                                    strokeDashoffset="0"
+                                    strokeLinecap="round"
+                                    r="66"
+                                    cx="70"
+                                    cy="70"
+                                    style={{ transition: 'stroke-dasharray 1s ease-in-out' }}
+                                />
+                            </svg>
+                            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', top: '35%', gap: '2px' }}>
+                                <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{Number(data.mainOverallRating ?? data.overallRating).toFixed(2)}</span>
+                                <StarIcon sx={{ color: '#facc15', fontSize: 24 }} />
+                            </div>
+                            <div style={{ position: 'absolute', bottom: '0' }}>
+                                {comparisonData && prevRoundObj && comparisonData.isSamePerson && renderImprovement(comparisonData.overallImprovement, false)}
+                            </div>
                         </div>
-                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>Average Rating (Out of 5)</div>
-                        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                            <span style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a' }}>{data.mainResponses ?? data.responses}</span>
-                            <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Total Responses</span>
+
+                        {/* Right: Leadership Member */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                            <Avatar
+                                src={`https://info.aec.edu.in/aec/employeephotos/${data.mainEmpId ?? data.empId}.jpg`}
+                                alt={data.mainTargetPersonName ?? data.targetPersonName}
+                                sx={{
+                                    width: 80,
+                                    height: 80,
+                                    border: '2px solid #e2e8f0',
+                                    bgcolor: '#f8fafc',
+                                    color: '#014284',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                    flexShrink: 0
+                                }}
+                            >
+                                <PersonIcon sx={{ fontSize: 40, opacity: 0.5 }} />
+                            </Avatar>
+                            <div>
+                                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Leadership Member</div>
+                                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
+                                    {toProperCase(data.mainTargetPersonName ?? data.targetPersonName) || "---"}
+                                </div>
+                                <div style={{ fontSize: '0.9rem', color: '#64748b', fontWeight: 600, marginTop: '6px', letterSpacing: '0.02em' }}>
+                                    {displayRole}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Bottom stats row */}
+                    <div style={{ padding: '0 24px 20px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 140px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9', padding: '12px 16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ backgroundColor: '#eff6ff', padding: '8px', borderRadius: '50%', display: 'flex' }}>
+                                <GroupIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{data.mainResponses ?? data.responses}</span>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Total Responses</span>
+                            </div>
+                        </div>
+
+                        <div style={{ flex: '1 1 140px', backgroundColor: '#f8fafc', border: '1px solid #f1f5f9', padding: '12px 16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ backgroundColor: '#eff6ff', padding: '8px', borderRadius: '50%', display: 'flex' }}>
+                                <StarIcon sx={{ color: '#3b82f6', fontSize: 20 }} />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{Number(data.mainOverallRating ?? data.overallRating).toFixed(2)} <span style={{fontSize: '0.8rem', color: '#94a3b8', fontWeight: 500}}>/ 5</span></span>
+                                <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>Average Rating</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Vertical Divider */}
-                    <div className="summary-divider" />
-
-                    {/* Right: Leadership Member */}
-                    <div style={{
-                        padding: '20px 28px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '16px',
-                    }}>
-                        <Avatar
-                            src={`https://info.aec.edu.in/aec/employeephotos/${data.mainEmpId ?? data.empId}.jpg`}
-                            alt={data.mainTargetPersonName ?? data.targetPersonName}
+                    {/* Export Button */}
+                    <div style={{ padding: '0 24px 24px', display: 'flex' }}>
+                        <Button
+                            variant="contained"
+                            onClick={handleExportPDF}
+                            disabled={isExporting}
+                            startIcon={<DownloadIcon />}
                             sx={{
-                                width: 64,
-                                height: 64,
-                                border: '2px solid #e2e8f0',
-                                bgcolor: '#f8fafc',
-                                color: '#014284',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-                                flexShrink: 0
+                                backgroundColor: '#014284',
+                                color: 'white',
+                                fontWeight: 600,
+                                borderRadius: '8px',
+                                padding: '8px 24px',
+                                textTransform: 'none',
+                                boxShadow: '0 4px 6px -1px rgba(1, 66, 132, 0.2)',
+                                '&:hover': {
+                                    backgroundColor: '#035cb9',
+                                }
                             }}
                         >
-                            <PersonIcon sx={{ fontSize: 32, opacity: 0.5 }} />
-                        </Avatar>
-                        <div>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600, marginBottom: '4px' }}>Leadership Member</div>
-                            <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                                {toProperCase(data.mainTargetPersonName ?? data.targetPersonName) || "---"}
-                            </div>
-                            <div style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 600, marginTop: '4px', letterSpacing: '0.04em' }}>
-                                {displayRole}
-                            </div>
-                        </div>
+                            {isExporting ? "Generating PDF..." : "Download Report"}
+                        </Button>
                     </div>
                 </div>
 
@@ -760,28 +822,6 @@ function Reports() {
                                 {selectedGiverRole === null ? 'Overall Report' : `${selectedGiverRole} Report`}
                             </span>
                         </div>
-
-                        {/* Export Buttons relocated here */}
-                        <div className="reports-actions" style={{ display: 'flex', gap: '12px' }}>
-                            <Button
-                                variant="contained"
-                                onClick={handleExportPDF}
-                                disabled={isExporting}
-                                sx={{
-                                    backgroundColor: '#014284',
-                                    color: 'white',
-                                    fontWeight: 600,
-                                    borderRadius: '8px',
-                                    textTransform: 'none',
-                                    boxShadow: '0 4px 6px -1px rgba(1, 66, 132, 0.2)',
-                                    '&:hover': {
-                                        backgroundColor: '#035cb9',
-                                    }
-                                }}
-                            >
-                                {isExporting ? "Generating PDF..." : "Export PDF Report"}
-                            </Button>
-                        </div>
                     </div>
                 </div>
 
@@ -868,13 +908,13 @@ function Reports() {
                                     {filteredSections.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={getPremiumColor(entry.avgRating)} />
                                     ))}
-                                    <LabelList 
-                                        dataKey="avgRating" 
+                                    <LabelList
+                                        dataKey="avgRating"
                                         content={(props) => {
                                             const { x, y, width, height, value, index } = props;
                                             const section = filteredSections[index];
                                             const imp = section.improvement;
-                                            
+
                                             return (
                                                 <g>
                                                     <text x={x + width + 10} y={y + height / 2 + 5} fill="#475569" fontSize="13" fontWeight="600">
@@ -887,7 +927,7 @@ function Reports() {
                                                     )}
                                                 </g>
                                             );
-                                        }} 
+                                        }}
                                     />
                                 </Bar>
                             </BarChart>
