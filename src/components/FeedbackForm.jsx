@@ -76,21 +76,63 @@ export default function FeedbackPage() {
   );
 
   // Track which optional roles the user has decided to add to their current session
-  const [selectedOptionalKeys, setSelectedOptionalKeys] = useState([]);
+  const [selectedOptionalBatches, setSelectedOptionalBatches] = useState([]);
+  const selectedOptionalKeys = useMemo(() => selectedOptionalBatches.flat(), [selectedOptionalBatches]);
 
   // Local state for checkboxes in the optional roles prompt
   const [tempSelectedKeys, setTempSelectedKeys] = useState([]);
 
   // The roles actually being filled in the form
   const roles = useMemo(() => {
-    const selectedOptionals = optionalRoles.filter((r) =>
-      selectedOptionalKeys.includes(r.key),
-    );
-    return [...mandatoryRoles, ...selectedOptionals];
-  }, [mandatoryRoles, optionalRoles, selectedOptionalKeys]);
+    // Define a fixed hierarchy order. Keys can be prefixes (we match by startsWith or includes):
+    // 1. hod
+    // 2. associate_dean (all associate_dean_*) and dean (all dean_*) grouped together as second priority
+    // 3. registrar
+    // 4. pro_vc (any pro_vc_*)
+    // Any other roles come after.
+    const getPriority = (r) => {
+      const key = (r.key || r.roleId || "").toString().toLowerCase();
+      if (key === "hod") return 0;
+      // dean-level group: CoE, any dean_*, associate_dean_*
+      if (key === "coe" || key.startsWith("dean") || key.startsWith("associate_dean")) return 1;
+      // next level: Pro Vice and Registrar together
+      if (key === "registrar" || key.startsWith("pro_vc")) return 2;
+      return 3;
+    };
 
-  const [activeRole, setActiveRole] = useState(0);
-  const [activeSection, setActiveSection] = useState(0);
+    const sortRoles = (roleList) => {
+      const copy = [...roleList];
+      copy.sort((a, b) => {
+        const pa = getPriority(a);
+        const pb = getPriority(b);
+        if (pa !== pb) return pa - pb;
+        // Stable secondary ordering: keep existing order by roleId if available
+        if (a.roleId && b.roleId) return String(a.roleId).localeCompare(String(b.roleId));
+        return 0;
+      });
+      return copy;
+    };
+
+    // 1. Start with mandatory roles (sorted by priority)
+    let merged = sortRoles(mandatoryRoles);
+
+    // 2. Append each batch of optional roles selected, sorting within the batch
+    for (const batch of selectedOptionalBatches) {
+      const batchRoles = optionalRoles.filter((r) => batch.includes(r.key));
+      merged = merged.concat(sortRoles(batchRoles));
+    }
+
+    return merged;
+  }, [mandatoryRoles, optionalRoles, selectedOptionalBatches]);
+
+  // Use roleKey for stable identification instead of index (prevents remapping when order changes)
+  const [activeRoleKey, setActiveRoleKey] = useState(null);
+  // Keep per-role active section so switching roles preserves progress
+  const [activeSections, setActiveSections] = useState({});
+
+  const setActiveSectionForRole = (roleKey, sectionIndex) => {
+    setActiveSections((prev) => ({ ...prev, [roleKey]: sectionIndex }));
+  };
   const [responses, setResponses] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState({
@@ -109,7 +151,9 @@ export default function FeedbackPage() {
     mandatoryRoles.length > 0, // skip screen if mandatory roles already exist
   );
 
-  const role = roles[activeRole] || roles[0];
+  const activeRoleIndex = Math.max(0, roles.findIndex((r) => r.key === activeRoleKey));
+  const role = roles[activeRoleIndex] || roles[0];
+  const activeSection = activeSections[role?.key] ?? 0;
   const port = import.meta.env.VITE_BACKEND_URL;
 
   /* sort questions */
@@ -126,7 +170,7 @@ export default function FeedbackPage() {
   const currentSectionColor =
     sectionColors[activeSection % sectionColors.length];
 
-  const isLastRole = activeRole === roles.length - 1;
+  const isLastRole = activeRoleIndex === roles.length - 1;
   const isLastSection = activeSection === sections.length - 1;
   const hasRemainingOptionals = optionalRoles.some(
     (r) => !selectedOptionalKeys.includes(r.key),
@@ -211,17 +255,80 @@ export default function FeedbackPage() {
     return true;
   };
 
+  /* validate full role answered (all rating questions for a role) */
+  const validateRoleCompleted = (roleIndex) => {
+    const r = (typeof roleIndex === "number" ? roles[roleIndex] : null) ||
+      roles.find((x) => x.key === roleIndex) || roles[0];
+    if (!r) return true;
+
+    const roleData = responses[r.key] || { ratingAnswers: [], textAnswers: [] };
+    const answeredRatingIds = roleData.ratingAnswers.map((ans) => ans.questionId.toString());
+
+    const roleQuestions = (r.questions || []).filter((q) => q.type === "rating");
+
+    for (const q of roleQuestions) {
+      if (!answeredRatingIds.includes(q._id.toString())) {
+        setToast({ open: true, message: "Please answer all questions for the current role before switching.", severity: "warning" });
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Pure check (no side-effects) to see if a role is fully answered — safe to call during render
+  const isRoleFullyAnswered = (roleIndex) => {
+    const r = (typeof roleIndex === "number" ? roles[roleIndex] : null) ||
+      roles.find((x) => x.key === roleIndex) || roles[0];
+    if (!r) return true;
+
+    const roleData = responses[r.key] || { ratingAnswers: [], textAnswers: [] };
+    const answeredRatingIds = roleData.ratingAnswers.map((ans) => ans.questionId.toString());
+
+    const roleQuestions = (r.questions || []).filter((q) => q.type === "rating");
+
+    for (const q of roleQuestions) {
+      if (!answeredRatingIds.includes(q._id.toString())) {
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  // Ensure activeRoleKey is seeded when roles load or when roleSelectionDone becomes true
+  useEffect(() => {
+    if (!roleSelectionDone) return;
+    if (!roles || roles.length === 0) return;
+    // If current activeRoleKey is missing or no longer present, pick first role
+    if (!activeRoleKey || !roles.find((r) => r.key === activeRoleKey)) {
+      setActiveRoleKey(roles[0].key);
+      setActiveSections((prev) => ({ ...prev, [roles[0].key]: 0 }));
+    }
+  }, [roleSelectionDone, roles]);
+
   /* next */
 
   const nextSection = () => {
     if (!validateSection()) return;
-
     if (activeSection < sections.length - 1) {
-      setActiveSection((prev) => prev + 1);
-    } else {
-      if (activeRole < roles.length - 1) {
-        setActiveRole((prev) => prev + 1);
-        setActiveSection(0);
+      setActiveSectionForRole(role.key, activeSection + 1);
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    // At last section — move to next role if current role completed
+    const curIndex = roles.findIndex((r) => r.key === role.key);
+    if (curIndex >= 0 && curIndex < roles.length - 1) {
+      if (!isRoleFullyAnswered(role.key)) {
+        validateRoleCompleted(role.key);
+        return;
+      }
+
+      const nextRole = roles[curIndex + 1];
+      if (nextRole) {
+        setActiveRoleKey(nextRole.key);
+        setActiveSections((prev) => ({ ...prev, [nextRole.key]: 0 }));
       }
     }
     window.scrollTo(0, 0);
@@ -231,21 +338,21 @@ export default function FeedbackPage() {
 
   const previousSection = () => {
     if (activeSection > 0) {
-      setActiveSection((prev) => prev - 1);
+      setActiveSectionForRole(role.key, activeSection - 1);
     } else {
-      if (activeRole > 0) {
-        const prevRole = activeRole - 1;
-
+      const curIndex = roles.findIndex((r) => r.key === role.key);
+      if (curIndex > 0) {
+        const prevRole = roles[curIndex - 1];
         const prevSections = [
           ...new Set(
-            roles[prevRole].questions
+            (prevRole.questions || [])
               .sort((a, b) => a.order - b.order)
               .map((q) => q.section.section),
           ),
         ];
 
-        setActiveRole(prevRole);
-        setActiveSection(prevSections.length - 1);
+        setActiveRoleKey(prevRole.key);
+        setActiveSections((prev) => ({ ...prev, [prevRole.key]: prevSections.length - 1 }));
       }
     }
     window.scrollTo(0, 0);
@@ -453,11 +560,36 @@ export default function FeedbackPage() {
             variant="contained"
             disabled={tempSelectedKeys.length === 0}
             onClick={() => {
-              setSelectedOptionalKeys(tempSelectedKeys);
+              const getPriority = (r) => {
+                const key = (r.key || r.roleId || "").toString().toLowerCase();
+                if (key === "hod") return 0;
+                if (key === "coe" || key.startsWith("dean") || key.startsWith("associate_dean")) return 1;
+                if (key === "registrar" || key.startsWith("pro_vc")) return 2;
+                return 3;
+              };
+
+              const sortRoles = (roleList) => {
+                const copy = [...roleList];
+                copy.sort((a, b) => {
+                  const pa = getPriority(a);
+                  const pb = getPriority(b);
+                  if (pa !== pb) return pa - pb;
+                  if (a.roleId && b.roleId) return String(a.roleId).localeCompare(String(b.roleId));
+                  return 0;
+                });
+                return copy;
+              };
+
+              // compute merged local roles to pick an appropriate starting role key
+              const selectedOptionalsLocal = optionalRoles.filter((r) => tempSelectedKeys.includes(r.key));
+              const mergedLocal = [...sortRoles(mandatoryRoles), ...sortRoles(selectedOptionalsLocal)];
+
+              setSelectedOptionalBatches([tempSelectedKeys]);
               setTempSelectedKeys([]);
               setRoleSelectionDone(true);
-              setActiveRole(0);
-              setActiveSection(0);
+              // set active role key to first merged role (useEffect will also ensure this)
+              if (mergedLocal[0]) setActiveRoleKey(mergedLocal[0].key);
+              if (mergedLocal[0]) setActiveSectionForRole(mergedLocal[0].key, 0);
               window.scrollTo(0, 0);
             }}
             sx={{
@@ -526,10 +658,30 @@ export default function FeedbackPage() {
         {roles.length > 0 && (
           <Box sx={{ mb: 4 }}>
             <Tabs
-              value={activeRole}
+              value={activeRoleIndex}
               onChange={(e, v) => {
-                setActiveRole(v);
-                setActiveSection(0);
+                // If roles changed and index invalid, ignore
+                if (!roles[v]) return;
+
+                // Allow backward navigation always
+                if (v < activeRoleIndex) {
+                  setActiveRoleKey(roles[v].key);
+                  setActiveSectionForRole(roles[v].key, 0);
+                  return;
+                }
+
+                // Same tab
+                if (v === activeRoleIndex) return;
+
+                // Forward navigation: allow only if current role is fully completed
+                if (!isRoleFullyAnswered(role.key)) {
+                  // show toast and block
+                  validateRoleCompleted(role.key);
+                  return;
+                }
+
+                setActiveRoleKey(roles[v].key);
+                setActiveSectionForRole(roles[v].key, 0);
               }}
               variant="scrollable"
               scrollButtons="auto"
@@ -539,10 +691,11 @@ export default function FeedbackPage() {
                 },
               }}
             >
-              {roles.map((r) => (
+              {roles.map((r, idx) => (
                 <Tab
                   key={r.roleId}
                   disableRipple
+                  disabled={idx > activeRoleIndex && !isRoleFullyAnswered(role.key)}
                   label={
                     <Box sx={{ textAlign: "center" }}>
                       <Typography
@@ -917,15 +1070,57 @@ export default function FeedbackPage() {
                 <Button
                   variant="contained"
                   onClick={() => {
-                    const currentRoleCount = roles.length;
-                    setSelectedOptionalKeys((prev) => [
+                    const getPriority = (r) => {
+                      const key = (r.key || r.roleId || "").toString().toLowerCase();
+                      if (key === "hod") return 0;
+                      if (key === "coe" || key.startsWith("dean") || key.startsWith("associate_dean")) return 1;
+                      if (key === "registrar" || key.startsWith("pro_vc")) return 2;
+                      return 3;
+                    };
+
+                    const sortRoles = (roleList) => {
+                      const copy = [...roleList];
+                      copy.sort((a, b) => {
+                        const pa = getPriority(a);
+                        const pb = getPriority(b);
+                        if (pa !== pb) return pa - pb;
+                        if (a.roleId && b.roleId) return String(a.roleId).localeCompare(String(b.roleId));
+                        return 0;
+                      });
+                      return copy;
+                    };
+
+                    // Compute merged & sorted roles locally so we know the index to navigate to
+                    let mergedLocal = sortRoles(mandatoryRoles);
+                    for (const batch of selectedOptionalBatches) {
+                      const batchRoles = optionalRoles.filter((r) => batch.includes(r.key));
+                      mergedLocal = mergedLocal.concat(sortRoles(batchRoles));
+                    }
+                    const newBatchRoles = optionalRoles.filter((r) => tempSelectedKeys.includes(r.key));
+                    mergedLocal = mergedLocal.concat(sortRoles(newBatchRoles));
+
+                    // find index of first newly added role in mergedLocal
+                    const firstNewKey = sortRoles(newBatchRoles)[0]?.key || tempSelectedKeys[0];
+                    const targetIndex = mergedLocal.findIndex((r) => r.key === firstNewKey);
+
+                    setSelectedOptionalBatches((prev) => [
                       ...prev,
-                      ...tempSelectedKeys,
+                      tempSelectedKeys,
                     ]);
                     setTempSelectedKeys([]); // Reset temp keys
                     setUserChoiceForOptional(null); // Reset choice for next time
-                    setActiveRole(currentRoleCount); // Navigate to the first newly added role
-                    setActiveSection(0);
+                    // If we found the newly added role's index in the merged sorted list, navigate there.
+                    if (targetIndex >= 0) {
+                      setActiveRoleKey(mergedLocal[targetIndex].key);
+                      setActiveSectionForRole(mergedLocal[targetIndex].key, 0);
+                    } else {
+                      // fallback: go to last role
+                      const last = mergedLocal[mergedLocal.length - 1] || roles[roles.length - 1];
+                      if (last) {
+                        setActiveRoleKey(last.key);
+                        setActiveSectionForRole(last.key, 0);
+                      }
+                    }
                     window.scrollTo(0, 0);
                   }}
                   sx={{
@@ -987,7 +1182,7 @@ export default function FeedbackPage() {
             <Button
               variant="outlined"
               onClick={previousSection}
-              disabled={activeSection === 0 && activeRole === 0}
+              disabled={activeSection === 0 && activeRoleIndex === 0}
               sx={{
                 textTransform: "none",
                 borderRadius: "8px",
