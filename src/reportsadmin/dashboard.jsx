@@ -174,7 +174,7 @@ function FeedbackDashboard() {
 
     const allTargetRoles = {
         'hod': { id: 'hod', title: 'HOD', icon: <ManageAccountsIcon fontSize="large" />, color: '#4facfe' },
-        'associate_dean_soe': { id: 'associate_dean_soe', title: 'Associate Dean SoE', icon: <SchoolIcon fontSize="large" />, color: '#43e97b' },
+        'dean_soe': { id: 'dean_soe', title: 'Dean SoE', icon: <SchoolIcon fontSize="large" />, color: '#43e97b' },
         'associate_dean_fe': { id: 'associate_dean_fe', title: 'Associate Dean FE', icon: <SchoolIcon fontSize="large" />, color: '#43e97b' },
         'associate_dean_sos': { id: 'associate_dean_sos', title: 'Associate Dean SoS', icon: <SchoolIcon fontSize="large" />, color: '#43e97b' },
         'associate_dean_sob': { id: 'associate_dean_sob', title: 'Associate Dean SoB', icon: <SchoolIcon fontSize="large" />, color: '#43e97b' },
@@ -217,7 +217,7 @@ function FeedbackDashboard() {
         'dean_iqac',
         'dean_ir',
         'dean_sop',
-        'associate_dean_soe',
+        'dean_soe',
         'associate_dean_fe',
         'associate_dean_sos',
         'associate_dean_sob',

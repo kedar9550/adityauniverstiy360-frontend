@@ -87,7 +87,7 @@ const formatXAxis = (value) => {
 
 const roleNames = {
     hod: 'HOD',
-    associate_dean_soe: 'Associate Dean SoE',
+    dean_soe: 'Dean SoE',
     associate_dean_fe: 'Associate Dean FE',
     associate_dean_sos: 'Associate Dean SoS',
     associate_dean_sob: 'Associate Dean SoB',

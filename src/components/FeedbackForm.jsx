@@ -142,7 +142,7 @@ export default function FeedbackPage() {
   });
   const [submitError, setSubmitError] = useState("");
   const [userChoiceForOptional, setUserChoiceForOptional] = useState(
-    employeeRole === "Assoc Dean/Dean" ? "yes" : null,
+    (employeeRole === "Assoc Dean/Dean" || employeeRole === "Assoc Dean - SOE" || employeeRole === "Dean - SOE") ? "yes" : null,
   );
 
   // Track whether the user has passed the initial role-selection screen
@@ -777,7 +777,7 @@ export default function FeedbackPage() {
         )}
 
         {/* Welcome Message for Optional-only sessions */}
-        {roles.length === 0 && employeeRole !== "Assoc Dean/Dean" && (
+        {roles.length === 0 && employeeRole !== "Assoc Dean/Dean" && employeeRole !== "Assoc Dean - SOE" && employeeRole !== "Dean - SOE" && (
           <Box sx={{ textAlign: "center", py: 4, mb: 2 }}>
             <CheckCircleRoundedIcon
               sx={{ fontSize: "64px", color: "#10b981", mb: 2 }}
@@ -955,7 +955,7 @@ export default function FeedbackPage() {
             }}
           >
             <Typography sx={{ color: "#475569", mb: 3, fontSize: "1.1rem", fontWeight: 500 }}>
-              {employeeRole === "Assoc Dean/Dean"
+              {(employeeRole === "Assoc Dean/Dean" || employeeRole === "Assoc Dean - SOE" || employeeRole === "Dean - SOE")
                 ? "Select leadership roles you would like to provide feedback for:"
                 : roles.length === 0
                 ? "Would you like to provide feedback for any of the optional leadership roles listed below?"

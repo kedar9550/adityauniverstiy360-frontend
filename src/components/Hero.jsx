@@ -40,11 +40,15 @@ export default function Hero2() {
     school: false,
     designation: false,
     department: false,
+    employeeRole: false,
   });
 
   const port = import.meta.env.VITE_BACKEND_URL;
 
   const navigate = useNavigate();
+
+  const selectedSchool = schoolsList.find((s) => s._id === school);
+  const deptFreeCodes = ["SOE", "SOC"];
 
   const getBrowserSignature = () => {
     let signature = localStorage.getItem("feedback360_browser_signature");
@@ -99,9 +103,15 @@ export default function Hero2() {
       school: false,
       designation: false,
       department: false,
+      employeeRole: false,
     };
 
     let valid = true;
+
+    if (!employeeRole) {
+      newErrors.employeeRole = true;
+      valid = false;
+    }
 
     if (employeeRole === "Faculty" && !designation) {
       newErrors.designation = true;
@@ -115,7 +125,11 @@ export default function Hero2() {
 
     const selectedSchool = schoolsList.find((s) => s._id === school);
 
-    if (selectedSchool?.code === "SOE" && employeeRole !== "Assoc Dean/Dean" && !department) {
+    if (
+      deptFreeCodes.includes(selectedSchool?.code) &&
+      !["Assoc Dean", "Dean", "Assoc Dean/Dean", "Assoc Dean - SOE", "Dean - SOE"].includes(employeeRole) &&
+      !department
+    ) {
       newErrors.department = true;
       valid = false;
     }
@@ -315,7 +329,7 @@ export default function Hero2() {
 
                 // Reset Employee Role if it was HOD and the new school is not SOE
                 const selectedSchool = schoolsList.find((s) => s._id === selectedSchoolId);
-                if (selectedSchool?.code !== "SOE" && employeeRole === "HOD") {
+                if ((selectedSchool?.code !== "SOE" && selectedSchool?.code !== "SOC") && employeeRole === "HOD") {
                   setEmployeeRole("");
                 }
               }
@@ -340,18 +354,27 @@ export default function Hero2() {
             onChange={(e) => {
               if (!formLocked) {
                 setEmployeeRole(e.target.value);
+                setErrors((prev) => ({ ...prev, employeeRole: false }));
               }
             }}
+            error={errors.employeeRole}
+            helperText={errors.employeeRole && "Employee Role is required"}
           >
             {schoolsList.find((s) => s._id === school)?.code !== "UI" && (
               <MenuItem value="Faculty">Faculty</MenuItem>
             )}
 
-            {schoolsList.find((s) => s._id === school)?.code === "SOE" && (
+            {(schoolsList.find((s) => s._id === school)?.code === "SOE" || schoolsList.find((s) => s._id === school)?.code === "SOC") && (
               <MenuItem value="HOD">HOD</MenuItem>
             )}
 
-            {schoolsList.find((s) => s._id === school)?.code !== "UI" && (
+            {selectedSchool?.code === "SOE" && (
+              <MenuItem value="Assoc Dean - SOE">Assoc Dean - SOE</MenuItem>
+            )}
+            {selectedSchool?.code === "SOE" && (
+              <MenuItem value="Dean - SOE">Dean - SOE</MenuItem>
+            )}
+            {selectedSchool?.code !== "SOE" && selectedSchool?.code !== "UI" && (
               <MenuItem value="Assoc Dean/Dean">Assoc Dean/Dean</MenuItem>
             )}
 
@@ -410,7 +433,7 @@ export default function Hero2() {
 
           {/* Department */}
 
-          {schoolsList.find((s) => s._id === school)?.code === "SOE" && employeeRole !== "Assoc Dean/Dean" && (
+          {deptFreeCodes.includes(selectedSchool?.code) && !["Assoc Dean", "Dean", "Assoc Dean/Dean", "Assoc Dean - SOE", "Dean - SOE"].includes(employeeRole) && (
             <TextField
               select
               label="Department"

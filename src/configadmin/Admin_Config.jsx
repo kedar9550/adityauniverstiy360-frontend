@@ -1,27 +1,28 @@
 import React, { useEffect, useState } from "react";
-import { 
-  Box, 
-  Paper, 
-  Grid, 
-  Typography, 
-  Button, 
-  TextField, 
-  Select, 
-  MenuItem, 
-  FormControl, 
-  InputLabel, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead, 
-  TableRow, 
-  IconButton, 
-  Chip, 
+import {
+  Box,
+  Paper,
+  Grid,
+  Typography,
+  Button,
+  TextField,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  IconButton,
+  Chip,
   ButtonGroup,
   Divider,
   Fade,
-  Alert
+  Alert,
+  TableSortLabel
 } from "@mui/material";
 import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from "@mui/icons-material";
 import axios from "axios";
@@ -35,6 +36,40 @@ const AdminConfig = () => {
   const [editId, setEditId] = useState(null);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  const [sortField, setSortField] = useState("");
+  const [sortOrder, setSortOrder] = useState("asc");
+
+  const handleSort = (field) => {
+    const isAsc = sortField === field && sortOrder === "asc";
+    setSortOrder(isAsc ? "desc" : "asc");
+    setSortField(field);
+  };
+
+  const getSortedData = () => {
+    if (!sortField) return dataList;
+    return [...dataList].sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === "role") {
+        aVal = a.role?.name || "";
+        bVal = b.role?.name || "";
+      } else if (sortField === "school") {
+        aVal = a.school?.name || "";
+        bVal = b.school?.name || "";
+      }
+
+      if (typeof aVal === "string") {
+        aVal = aVal.toLowerCase();
+        bVal = (bVal || "").toString().toLowerCase();
+      }
+
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
+      return 0;
+    });
+  };
 
   const [formData, setFormData] = useState({
     name: "",
@@ -184,6 +219,8 @@ const AdminConfig = () => {
 
   useEffect(() => {
     resetForm();
+    setSortField("");
+    setSortOrder("asc");
   }, [section]);
 
   useEffect(() => {
@@ -245,17 +282,18 @@ const AdminConfig = () => {
         Admin Configuration
       </Typography>
 
-      <Box sx={{ mb: 4, display: "flex", justifyContent: "center" }}>
+      <Box sx={{ mb: 4, display: "flex", justifyContent: "flex-start" }}>
         <ButtonGroup variant="contained" sx={{ borderRadius: "12px", overflow: "hidden" }}>
-          <Button 
+          <Button
             onClick={() => setSection("rounds")}
-            sx={{ 
+            sx={{
               bgcolor: section === "rounds" ? "#be9337" : "#032649",
               "&:hover": { bgcolor: section === "rounds" ? "#a6822f" : "#021b33" }
             }}
           >
             Rounds
           </Button>
+          {/* 
           <Button 
             onClick={() => setSection("roles")}
             sx={{ 
@@ -265,15 +303,17 @@ const AdminConfig = () => {
           >
             Roles
           </Button>
-          <Button 
+          */}
+          <Button
             onClick={() => setSection("assignments")}
-            sx={{ 
+            sx={{
               bgcolor: section === "assignments" ? "#be9337" : "#032649",
               "&:hover": { bgcolor: section === "assignments" ? "#a6822f" : "#021b33" }
             }}
           >
             Assignments
           </Button>
+
         </ButtonGroup>
       </Box>
 
@@ -547,17 +587,17 @@ const AdminConfig = () => {
           </Grid>
 
           <Box sx={{ mt: 4, display: "flex", gap: 2, justifyContent: "center" }}>
-            <Button 
-              type="submit" 
-              variant="contained" 
+            <Button
+              type="submit"
+              variant="contained"
               sx={{ bgcolor: "#032649", px: 4, height: "45px", borderRadius: "8px" }}
             >
               {isEditing ? "Update" : "Add"} {section.slice(0, -1)}
             </Button>
             {isEditing && (
-              <Button 
-                onClick={resetForm} 
-                variant="outlined" 
+              <Button
+                onClick={resetForm}
+                variant="outlined"
                 sx={{ px: 4, height: "45px", borderRadius: "8px" }}
               >
                 Cancel
@@ -571,36 +611,130 @@ const AdminConfig = () => {
         <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
           {section.charAt(0).toUpperCase() + section.slice(1)} List
         </Typography>
-        
+
         <TableContainer>
           <Table sx={{ minWidth: 650 }}>
-            <TableHead>
+             <TableHead>
               <TableRow sx={{ bgcolor: "rgba(3, 38, 73, 0.05)" }}>
                 <TableCell sx={{ fontWeight: 700 }}>S.No</TableCell>
-                {section === "assignments" && <TableCell sx={{ fontWeight: 700 }}>Emp ID</TableCell>}
-                {section !== "rounds" && <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>}
-                {section === "roles" && <TableCell sx={{ fontWeight: 700 }}>Key</TableCell>}
+                {section === "assignments" && (
+                  <TableCell sx={{ fontWeight: 700 }}>
+                    <TableSortLabel
+                      active={sortField === "empId"}
+                      direction={sortField === "empId" ? sortOrder : "asc"}
+                      onClick={() => handleSort("empId")}
+                    >
+                      Emp ID
+                    </TableSortLabel>
+                  </TableCell>
+                )}
+                {section !== "rounds" && (
+                  <TableCell sx={{ fontWeight: 700 }}>
+                    <TableSortLabel
+                      active={sortField === "name"}
+                      direction={sortField === "name" ? sortOrder : "asc"}
+                      onClick={() => handleSort("name")}
+                    >
+                      Name
+                    </TableSortLabel>
+                  </TableCell>
+                )}
+                {section === "roles" && (
+                  <TableCell sx={{ fontWeight: 700 }}>
+                    <TableSortLabel
+                      active={sortField === "key"}
+                      direction={sortField === "key" ? sortOrder : "asc"}
+                      onClick={() => handleSort("key")}
+                    >
+                      Key
+                    </TableSortLabel>
+                  </TableCell>
+                )}
                 {section === "rounds" && (
                   <>
-                    <TableCell sx={{ fontWeight: 700 }}>Academic Year</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Cycle</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Round No</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Start Date</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>End Date</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "academicYear"}
+                        direction={sortField === "academicYear" ? sortOrder : "asc"}
+                        onClick={() => handleSort("academicYear")}
+                      >
+                        Academic Year
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "cycle"}
+                        direction={sortField === "cycle" ? sortOrder : "asc"}
+                        onClick={() => handleSort("cycle")}
+                      >
+                        Cycle
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "round"}
+                        direction={sortField === "round" ? sortOrder : "asc"}
+                        onClick={() => handleSort("round")}
+                      >
+                        Round No
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "startDate"}
+                        direction={sortField === "startDate" ? sortOrder : "asc"}
+                        onClick={() => handleSort("startDate")}
+                      >
+                        Start Date
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "endDate"}
+                        direction={sortField === "endDate" ? sortOrder : "asc"}
+                        onClick={() => handleSort("endDate")}
+                      >
+                        End Date
+                      </TableSortLabel>
+                    </TableCell>
                   </>
                 )}
                 {section === "assignments" && (
                   <>
-                    <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Location</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "role"}
+                        direction={sortField === "role" ? sortOrder : "asc"}
+                        onClick={() => handleSort("role")}
+                      >
+                        Role
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "school"}
+                        direction={sortField === "school" ? sortOrder : "asc"}
+                        onClick={() => handleSort("school")}
+                      >
+                        Location
+                      </TableSortLabel>
+                    </TableCell>
                   </>
                 )}
-                <TableCell sx={{ fontWeight: 700 }}>{section === "roles" ? "Mandatory" : "Status"}</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>
+                  <TableSortLabel
+                    active={sortField === (section === "roles" ? "mandatory" : "active")}
+                    direction={sortField === (section === "roles" ? "mandatory" : "active") ? sortOrder : "asc"}
+                    onClick={() => handleSort(section === "roles" ? "mandatory" : "active")}
+                  >
+                    {section === "roles" ? "Mandatory" : "Status"}
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {dataList.map((item, index) => (
+              {getSortedData().map((item, index) => (
                 <TableRow key={item._id} sx={{ "&:hover": { bgcolor: "rgba(0,0,0,0.02)" } }}>
                   <TableCell>{index + 1}</TableCell>
                   {section === "assignments" && <TableCell sx={{ fontWeight: 500 }}>{item.empId || "---"}</TableCell>}
@@ -634,17 +768,17 @@ const AdminConfig = () => {
                   )}
                   <TableCell>
                     {section === "roles" ? (
-                      <Chip 
-                        label={item.mandatory ? "Yes" : "No"} 
-                        color={item.mandatory ? "primary" : "default"} 
-                        size="small" 
+                      <Chip
+                        label={item.mandatory ? "Yes" : "No"}
+                        color={item.mandatory ? "primary" : "default"}
+                        size="small"
                         sx={{ borderRadius: "6px" }}
                       />
                     ) : (
-                      <Chip 
-                        label={item.active ? "Active" : "Inactive"} 
-                        color={item.active ? "success" : "default"} 
-                        size="small" 
+                      <Chip
+                        label={item.active ? "Active" : "Inactive"}
+                        color={item.active ? "success" : "default"}
+                        size="small"
                         sx={{ borderRadius: "6px" }}
                       />
                     )}
