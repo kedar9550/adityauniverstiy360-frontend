@@ -161,7 +161,7 @@ export const generateFeedbackReportPDF = (doc, config) => {
     const scopeDisplayString = 'Overall Report' + (selectedSchool ? ` (${selectedSchool.name} - ${activeDept ? activeDept.name : 'All Departments'})` : '');
 
     let overallImp = undefined;
-    if (overallCompare && overallCompare.isSamePerson && overallCompare.overallImprovement !== undefined) {
+    if (prevRoundObj && overallCompare && overallCompare.isSamePerson && overallCompare.overallImprovement !== undefined) {
         overallImp = overallCompare.overallImprovement;
     }
 
@@ -333,43 +333,45 @@ export const generateFeedbackReportPDF = (doc, config) => {
     currentY += 65;
 
     // EXECUTIVE SUMMARY PANEL
-    doc.setFontSize(9);
-    const strLines = topStrengths.length > 0 ? topStrengths.length : 1;
-    const impTextLines = doc.splitTextToSize("No section currently requires significant improvement based on the defined threshold.", (pageWidth - 28) / 2 - 10);
-    const impLines = areasForImprovement.length > 0 ? areasForImprovement.length : impTextLines.length;
+    if (sectionsData.length > 1) {
+        doc.setFontSize(9);
+        const strLines = topStrengths.length > 0 ? topStrengths.length : 1;
+        const impTextLines = doc.splitTextToSize("No section currently requires significant improvement based on the defined threshold.", (pageWidth - 28) / 2 - 10);
+        const impLines = areasForImprovement.length > 0 ? areasForImprovement.length : impTextLines.length;
 
-    const panelHeight = 24 + Math.max(strLines, impLines) * 5 + 5;
+        const panelHeight = 24 + Math.max(strLines, impLines) * 5 + 5;
 
-    drawRoundedRect(doc, 14, currentY, pageWidth - 28, panelHeight, 2, [255, 255, 255]);
-    doc.setFontSize(11);
-    doc.setFont("GoogleSans", "bold");
-    doc.setTextColor(...brandColors.darkText);
-    doc.text("Performance Insights", 20, currentY + 8);
+        drawRoundedRect(doc, 14, currentY, pageWidth - 28, panelHeight, 2, [255, 255, 255]);
+        doc.setFontSize(11);
+        doc.setFont("GoogleSans", "bold");
+        doc.setTextColor(...brandColors.darkText);
+        doc.text("Performance Insights", 20, currentY + 8);
 
-    doc.setFontSize(9);
-    doc.setTextColor(...brandColors.grayText);
-    doc.text("Top Strengths (Highest Rated)", 20, currentY + 18);
-    doc.setFont("GoogleSans", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(...brandColors.grayText);
+        doc.text("Top Strengths (Highest Rated)", 20, currentY + 18);
+        doc.setFont("GoogleSans", "normal");
 
-    if (topStrengths.length > 0) {
-        topStrengths.forEach((st, i) => {
-            if (st) doc.text(`• ${st.section} (${st.avgRating.toFixed(2)})`, 20, currentY + 24 + i * 5);
-        });
-    } else {
-        doc.text("No section met the defined strength threshold.", 20, currentY + 24);
-    }
+        if (topStrengths.length > 0) {
+            topStrengths.forEach((st, i) => {
+                if (st) doc.text(`• ${st.section} (${st.avgRating.toFixed(2)})`, 20, currentY + 24 + i * 5);
+            });
+        } else {
+            doc.text("No section met the defined strength threshold.", 20, currentY + 24);
+        }
 
-    doc.setFont("GoogleSans", "bold");
-    doc.setTextColor(...brandColors.grayText);
-    doc.text("Areas for Improvement (Lowest Rated)", pageWidth / 2, currentY + 18);
-    doc.setFont("GoogleSans", "normal");
+        doc.setFont("GoogleSans", "bold");
+        doc.setTextColor(...brandColors.grayText);
+        doc.text("Areas for Improvement (Lowest Rated)", pageWidth / 2, currentY + 18);
+        doc.setFont("GoogleSans", "normal");
 
-    if (areasForImprovement.length > 0) {
-        areasForImprovement.forEach((imp, i) => {
-            if (imp) doc.text(`• ${imp.section} (${imp.avgRating.toFixed(2)})`, pageWidth / 2, currentY + 24 + i * 5);
-        });
-    } else {
-        doc.text(impTextLines, pageWidth / 2, currentY + 24);
+        if (areasForImprovement.length > 0) {
+            areasForImprovement.forEach((imp, i) => {
+                if (imp) doc.text(`• ${imp.section} (${imp.avgRating.toFixed(2)})`, pageWidth / 2, currentY + 24 + i * 5);
+            });
+        } else {
+            doc.text(impTextLines, pageWidth / 2, currentY + 24);
+        }
     }
 
     // ==========================================
@@ -432,7 +434,7 @@ export const generateFeedbackReportPDF = (doc, config) => {
             lX += lg.w;
         });
 
-        const hasDiff = compareDataObj && compareDataObj.isSamePerson;
+        const hasDiff = prevRoundObj && compareDataObj && compareDataObj.isSamePerson;
         
         let headRow = ['Question', 'Rating', 'Score'];
         if (hasDiff) headRow.push('Diff');
@@ -622,6 +624,7 @@ export const generateFeedbackReportPDF = (doc, config) => {
     extractSuggestions(overallReport);
     Object.values(memberData.roleWise || {}).forEach(roleObj => extractSuggestions(roleObj.reportData));
 
+    let qY = p2Y + 15;
     if (allSuggestions.size > 0) {
         if (qY > doc.internal.pageSize.getHeight() - 40) { doc.addPage(); qY = 20; }
         doc.setFontSize(12);
@@ -633,8 +636,8 @@ export const generateFeedbackReportPDF = (doc, config) => {
         doc.setFont("GoogleSans", "normal");
         doc.setTextColor(...brandColors.grayText);
         doc.setFontSize(9);
-        Array.from(allSuggestions).forEach(sug => {
-            const lines = doc.splitTextToSize(`" ${sug} "`, pageWidth - 28);
+        Array.from(allSuggestions).forEach((sug, index) => {
+            const lines = doc.splitTextToSize(`${index + 1}. ${sug}`, pageWidth - 28);
             if (qY + (lines.length * 5) > doc.internal.pageSize.getHeight() - 15) { doc.addPage(); qY = 20; }
             doc.text(lines, 14, qY);
             qY += (lines.length * 5) + 3;

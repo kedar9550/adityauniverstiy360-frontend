@@ -191,7 +191,7 @@ export default function Header() {
                       color: "white"
                     }}
                   >
-                    {user.name ? user.name.charAt(0).toUpperCase() : <AccountCircle />}
+                    <AccountCircle fontSize="large" />
                   </Avatar>
                 </IconButton>
               </Tooltip>
