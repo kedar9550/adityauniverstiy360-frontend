@@ -741,9 +741,9 @@ function Reports() {
                         {/* Faculty / HoD / Dean */}
                         {(() => {
                             const allRoles = [
-                                { label: 'Faculty', color: '#10b981', key: 'Faculty', giverKey: 'Faculty' },
-                                { label: 'HOD', color: '#f97316', key: 'HOD', giverKey: 'HOD' },
-                                { label: 'Dean', color: '#8b5cf6', key: 'Dean', giverKey: 'Dean' },
+                                { label: 'Faculties', color: '#10b981', key: 'Faculty', giverKey: 'Faculty' },
+                                { label: 'HODs', color: '#f97316', key: 'HOD', giverKey: 'HOD' },
+                                { label: 'Deans', color: '#8b5cf6', key: 'Dean', giverKey: 'Dean' },
                             ];
 
                             const getVisibleGiverRoles = (targetRole) => {
