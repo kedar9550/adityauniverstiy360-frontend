@@ -133,6 +133,15 @@ export const generateFeedbackReportPDF = (doc, config) => {
         return val.toFixed(2);
     };
 
+    const getBarColor = (rating) => {
+        const num = parseFloat(rating);
+        if (num >= 4.5) return [22, 163, 74];   // #16A34A (Strongly Agree)
+        if (num >= 3.5) return [74, 222, 128];  // #4ADE80 (Agree)
+        if (num >= 2.5) return [250, 204, 21];  // #FACC15 (Neutral)
+        if (num >= 1.5) return [248, 113, 113]; // #F87171 (Disagree)
+        return [220, 38, 38];                   // #DC2626 (Strongly Disagree)
+    };
+
     const renderSectionsTable = (title, reportDataObj, compareDataObj, startYPos) => {
         if (!reportDataObj || !reportDataObj.sections || reportDataObj.sections.length === 0) return startYPos;
         const filtered = reportDataObj.sections.filter(item => !item.section?.toLowerCase().includes('open ended') && !item.section?.toLowerCase().includes('open-ended'));
@@ -146,19 +155,83 @@ export const generateFeedbackReportPDF = (doc, config) => {
         }
 
         doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
         doc.text(title, 14, startYPos);
-        autoTable(doc, {
-            startY: startYPos + 4,
-            head: [['Section', 'Avg Rating', 'Comparison']],
-            body: filtered.map(sec => {
-                const imp = getImprovementForSection(sec.section, reportDataObj, compareMapObj);
-                return [sec.section, sec.avgRating.toFixed(2), formatImpStr(imp)];
-            }),
-            theme: 'grid',
-            styles: { fontSize: 9 },
-            headStyles: { fillColor: [13, 148, 136] },
+        doc.setFont("helvetica", "normal");
+
+        let currentY = startYPos + 10;
+        const marginX = 14;
+        const maxSectionNameWidth = 65;
+        const barStartX = marginX + maxSectionNameWidth + 5;
+        const maxBarWidth = 95;
+        const barHeight = 6;
+
+        // Draw scale top
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        const scaleY = currentY - 2;
+        doc.text("1", barStartX, scaleY);
+        doc.text("2", barStartX + (maxBarWidth * 0.25), scaleY);
+        doc.text("3", barStartX + (maxBarWidth * 0.5), scaleY);
+        doc.text("4", barStartX + (maxBarWidth * 0.75), scaleY);
+        doc.text("5", barStartX + maxBarWidth, scaleY);
+
+        doc.setDrawColor(220, 220, 220);
+        doc.line(barStartX, scaleY + 1, barStartX + maxBarWidth, scaleY + 1);
+
+        filtered.forEach(sec => {
+            // Check page break
+            if (currentY > doc.internal.pageSize.getHeight() - 20) {
+                doc.addPage();
+                currentY = 20;
+            }
+
+            const imp = getImprovementForSection(sec.section, reportDataObj, compareMapObj);
+            const impStr = formatImpStr(imp);
+
+            // Section Name
+            doc.setFontSize(9);
+            doc.setTextColor(0, 0, 0);
+            const sectionLines = doc.splitTextToSize(sec.section, maxSectionNameWidth);
+            const textY = currentY + (barHeight / 2) + 1 + ((sectionLines.length - 1) * 2);
+            doc.text(sectionLines, barStartX - 5, textY, { align: 'right' });
+
+            // Background bar (gray)
+            doc.setFillColor(241, 245, 249);
+            doc.rect(barStartX, currentY, maxBarWidth, barHeight, 'F');
+
+            // Foreground bar (dynamic color)
+            const ratingWidth = Math.max(0, Math.min((sec.avgRating / 5) * maxBarWidth, maxBarWidth));
+            const barColor = getBarColor(sec.avgRating);
+            doc.setFillColor(...barColor);
+            doc.rect(barStartX, currentY, ratingWidth, barHeight, 'F');
+
+            // Text for rating
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(30, 41, 59);
+            doc.text(sec.avgRating.toFixed(2), barStartX + maxBarWidth + 4, currentY + 4);
+
+            // Comparison string
+            if (impStr !== "---") {
+                const impVal = parseFloat(impStr);
+                if (impVal > 0) {
+                    doc.setTextColor(22, 163, 74);
+                } else if (impVal < 0) {
+                    doc.setTextColor(220, 38, 38);
+                } else {
+                    doc.setTextColor(100, 116, 139);
+                }
+                doc.text(impStr, barStartX + maxBarWidth + 14, currentY + 4);
+            }
+
+            doc.setFont("helvetica", "normal");
+
+            // Update Y
+            currentY += Math.max(barHeight + 6, sectionLines.length * 5 + 4);
         });
-        return doc.lastAutoTable.finalY + 10;
+
+        return currentY + 8;
     };
 
     const renderQuestionsTable = (title, reportDataObj, compareDataObj, startYPos) => {

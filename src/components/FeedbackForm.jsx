@@ -63,6 +63,7 @@ export default function FeedbackPage() {
     schoolCode,
     departmentCode,
     employeeRole,
+    doj,
   } = location.state;
 
   // Split roles into mandatory and optional
@@ -420,6 +421,7 @@ export default function FeedbackPage() {
       roundId,
       browserSignature,
       giverRole: employeeRole,
+      doj: doj,
       responses: roles.map((r) => ({
         role: r.roleId,
         targetPersonName: r.assignedName, // Include the assigned name in submission

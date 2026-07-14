@@ -19,6 +19,10 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import { motion } from "framer-motion";
 
 export default function Hero2() {
+  if (sessionStorage.getItem("feedback_locked") === "true") {
+    return <div style={{ width: "100vw", height: "100vh", background: "white", position: "fixed", top: 0, left: 0, zIndex: 9999 }}></div>;
+  }
+
   const [schoolsList, setSchoolsList] = useState([]);
   const [school, setSchool] = useState("");
   const [designation, setDesignation] = useState("");
@@ -31,12 +35,17 @@ export default function Hero2() {
   const [roundId, setRoundId] = useState("");
   const [schoolCode, setSchoolCode] = useState("");
   const [departmentCode, setDepartmentCode] = useState("");
+  const [doj, setDoj] = useState("");
+  const [activeRound, setActiveRound] = useState(null);
+  const [dojVerified, setDojVerified] = useState(false);
+  const [dojNotEligible, setDojNotEligible] = useState(false);
 
   const [showRoles, setShowRoles] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formLocked, setFormLocked] = useState(false);
   const [completedMessage, setCompletedMessage] = useState("");
   const [errors, setErrors] = useState({
+    doj: false,
     school: false,
     designation: false,
     department: false,
@@ -76,6 +85,18 @@ export default function Hero2() {
     fetchSchools();
   }, []);
 
+  useEffect(() => {
+    const fetchActiveRound = async () => {
+      try {
+        const res = await axios.get(`${port}/feedback360/rounds/active`);
+        setActiveRound(res.data);
+      } catch (err) {
+        console.log(err);
+      }
+    };
+    fetchActiveRound();
+  }, []);
+
   /* ---------------- fetch departments ---------------- */
 
   useEffect(() => {
@@ -100,6 +121,7 @@ export default function Hero2() {
   //  Validation
   const validateForm = () => {
     let newErrors = {
+      doj: false,
       school: false,
       designation: false,
       department: false,
@@ -107,6 +129,10 @@ export default function Hero2() {
     };
 
     let valid = true;
+
+    if (!dojVerified) {
+      valid = false;
+    }
 
     if (!employeeRole) {
       newErrors.employeeRole = true;
@@ -161,7 +187,8 @@ export default function Hero2() {
         school: selectedSchool?.code,
         department: selectedDept?.code,
         browserSignature: browserSignature,
-        employeeRole: employeeRole
+        employeeRole: employeeRole,
+        doj: doj
       });
 
 
@@ -201,6 +228,7 @@ export default function Hero2() {
             department,
             designation: employeeRole === "Faculty" ? designation : "",
             employeeRole,
+            doj,
             roundId: roundData.id,
             schoolCode: res.data.schoolCode || "",
             departmentCode: res.data.departmentCode || "",
@@ -224,7 +252,28 @@ export default function Hero2() {
     }
   };
 
-  /* ---------------- role selection ---------------- */
+  const handleVerifyDoj = () => {
+    if (!doj) {
+      setErrors((prev) => ({ ...prev, doj: true }));
+      return;
+    }
+    if (activeRound?.dojCutoff && new Date(doj) > new Date(activeRound.dojCutoff)) {
+      setDojNotEligible(true);
+    } else {
+      setDojVerified(true);
+      setDojNotEligible(false);
+    }
+  };
+
+  useEffect(() => {
+    if (dojNotEligible) {
+      const timer = setTimeout(() => {
+        sessionStorage.setItem("feedback_locked", "true");
+        window.location.reload();
+      }, 60000);
+      return () => clearTimeout(timer);
+    }
+  }, [dojNotEligible]);
 
   const handleRoleChange = (roleKey) => {
     setSelectedRoles((prev) =>
@@ -248,6 +297,7 @@ export default function Hero2() {
         department,
         designation: employeeRole === "Faculty" ? designation : "",
         employeeRole,
+        doj,
         roundId,
         schoolCode,
         departmentCode,
@@ -301,20 +351,109 @@ export default function Hero2() {
           </Typography>
         </Box>
 
-        <Box
-          sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 3,
-            mb: 4,
-            justifyContent: { xs: "center", md: "flex-start" },
-            p: 3,
-            borderRadius: "14px",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          {/* School */}
+        {dojNotEligible ? (
+          <Box sx={{ mt: 4, mb: 4, display: "flex", justifyContent: "center" }}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 4,
+                width: { xs: "100%", sm: "80%", md: "60%" },
+                textAlign: "center",
+                borderRadius: "16px",
+                background: "#fef2f2",
+                border: "1px solid #fca5a5",
+                boxShadow: "0 10px 30px rgba(239, 68, 68, 0.1)",
+              }}
+            >
+              <Typography variant="h5" sx={{ fontWeight: 700, color: "#b91c1c", mb: 2 }}>
+                Not Allowed
+              </Typography>
+              <Typography sx={{ color: "#7f1d1d", fontSize: "16px", lineHeight: 1.6 }}>
+                You are not allowed to provide feedback in this round as your Date of Joining is after the cutoff date.
+              </Typography>
+            </Paper>
+          </Box>
+        ) : !dojVerified ? (
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 3,
+              mb: 4,
+              justifyContent: "center",
+              alignItems: "center",
+              p: 3,
+              borderRadius: "14px",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <TextField
+              fullWidth
+              label="Date of Joining"
+              name="doj"
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: new Date().toISOString().split("T")[0] }}
+              sx={{ width: { xs: "100%", sm: 250 } }}
+              value={doj}
+              onChange={(e) => {
+                if (!formLocked) {
+                  setDoj(e.target.value);
+                  setErrors((prev) => ({ ...prev, doj: false }));
+                }
+              }}
+              error={errors.doj}
+              helperText={errors.doj && "Date of Joining is required"}
+            />
+            <Button
+              variant="contained"
+              onClick={handleVerifyDoj}
+              sx={{
+                px: 4,
+                py: 1.5,
+                borderRadius: "12px",
+                fontSize: "15px",
+                fontWeight: 500,
+                background: "linear-gradient(135deg, #0b5299, #0d3f7a)",
+                boxShadow: "0 10px 25px rgba(11,82,153,0.25)",
+                "&:hover": {
+                  transform: "translateY(-2px)",
+                  boxShadow: "0 14px 30px rgba(11,82,153,0.35)",
+                },
+              }}
+            >
+              Next
+            </Button>
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 3,
+              mb: 4,
+              justifyContent: { xs: "center", md: "flex-start" },
+              p: 3,
+              borderRadius: "14px",
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            {/* DOJ */}
+            <TextField
+              fullWidth
+              label="Date of Joining"
+              name="doj"
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: new Date().toISOString().split("T")[0] }}
+              sx={{ width: { xs: "100%", sm: 250 } }}
+              value={doj}
+              disabled
+            />
+
+            {/* School */}
 
           <TextField
             select
@@ -491,6 +630,7 @@ export default function Hero2() {
             </Button>
           </Box>
         </Box>
+        )}
 
         {completedMessage && (
           <motion.div

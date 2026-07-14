@@ -130,7 +130,18 @@ function Reports() {
         displayRole = departmentCode ? `HOD (${departmentCode})` : `HOD`;
     }
 
-    const [data, setData] = useState(stateData.reportData || null);
+    const [data, setData] = useState(() => {
+        if (stateData.reportData) {
+            return {
+                ...stateData.reportData,
+                mainOverallRating: stateData.reportData.overallRating,
+                mainResponses: stateData.reportData.responses,
+                mainTargetPersonName: stateData.reportData.targetPersonName,
+                mainEmpId: stateData.reportData.empId
+            };
+        }
+        return null;
+    });
     const [loading, setLoading] = useState(!stateData.reportData);
     const [error, setError] = useState(null);
     const [showAllQuestions, setShowAllQuestions] = useState(false);
@@ -372,11 +383,11 @@ function Reports() {
                 setData(prev => ({
                     ...res.data,
                     // Always preserve the top-level giverRoleStats from the Overall fetch
-                    giverRoleStats: giverRoleFilter ? prev?.giverRoleStats : res.data.giverRoleStats,
-                    mainOverallRating: giverRoleFilter ? prev?.mainOverallRating : res.data.overallRating,
-                    mainResponses: giverRoleFilter ? prev?.mainResponses : res.data.responses,
-                    mainTargetPersonName: giverRoleFilter ? prev?.mainTargetPersonName : res.data.targetPersonName,
-                    mainEmpId: giverRoleFilter ? prev?.mainEmpId : res.data.empId
+                    giverRoleStats: giverRoleFilter ? (prev?.giverRoleStats || res.data.giverRoleStats) : res.data.giverRoleStats,
+                    mainOverallRating: giverRoleFilter ? (prev?.mainOverallRating ?? prev?.overallRating) : res.data.overallRating,
+                    mainResponses: giverRoleFilter ? (prev?.mainResponses ?? prev?.responses) : res.data.responses,
+                    mainTargetPersonName: giverRoleFilter ? (prev?.mainTargetPersonName ?? prev?.targetPersonName) : res.data.targetPersonName,
+                    mainEmpId: giverRoleFilter ? (prev?.mainEmpId ?? prev?.empId) : res.data.empId
                 }));
                 setLoading(false);
             })

@@ -80,6 +80,7 @@ const AdminConfig = () => {
     round: "",
     startDate: "",
     endDate: "",
+    dojCutoff: "",
     active: true,
     role: "",
     school: "",
@@ -128,6 +129,7 @@ const AdminConfig = () => {
             cycle: formData.cycle,
             startDate: formData.startDate,
             endDate: formData.endDate,
+            dojCutoff: formData.dojCutoff,
             active: formData.active
           };
           await axios.post(`${backendUrl}feedback360/rounds`, payload);
@@ -161,6 +163,7 @@ const AdminConfig = () => {
       round: "",
       startDate: "",
       endDate: "",
+      dojCutoff: "",
       active: true,
       role: "",
       school: "",
@@ -188,6 +191,7 @@ const AdminConfig = () => {
         round: item.round,
         startDate: item.startDate?.split("T")[0],
         endDate: item.endDate?.split("T")[0],
+        dojCutoff: item.dojCutoff?.split("T")[0] || "",
         active: item.active,
       });
     } else if (section === "assignments") {
@@ -403,6 +407,20 @@ const AdminConfig = () => {
                     type="date"
                     InputLabelProps={{ shrink: true }}
                     value={formData.endDate}
+                    onChange={handleInputChange}
+                    variant="outlined"
+                    size="small"
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} md={isEditing ? 2.5 : 3}>
+                  <TextField
+                    fullWidth
+                    label="DOJ Cutoff"
+                    name="dojCutoff"
+                    type="date"
+                    InputLabelProps={{ shrink: true }}
+                    value={formData.dojCutoff}
                     onChange={handleInputChange}
                     variant="outlined"
                     size="small"
@@ -697,6 +715,15 @@ const AdminConfig = () => {
                         End Date
                       </TableSortLabel>
                     </TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>
+                      <TableSortLabel
+                        active={sortField === "dojCutoff"}
+                        direction={sortField === "dojCutoff" ? sortOrder : "asc"}
+                        onClick={() => handleSort("dojCutoff")}
+                      >
+                        DOJ Cutoff
+                      </TableSortLabel>
+                    </TableCell>
                   </>
                 )}
                 {section === "assignments" && (
@@ -751,6 +778,7 @@ const AdminConfig = () => {
                       <TableCell>Round {item.round}</TableCell>
                       <TableCell>{new Date(item.startDate).toLocaleDateString()}</TableCell>
                       <TableCell>{new Date(item.endDate).toLocaleDateString()}</TableCell>
+                      <TableCell>{item.dojCutoff ? new Date(item.dojCutoff).toLocaleDateString() : "---"}</TableCell>
                     </>
                   )}
                   {section === "assignments" && (

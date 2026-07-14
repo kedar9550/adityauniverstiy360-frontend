@@ -3,13 +3,12 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://adityauniversity.in/360degreefeedback",
- 
+  "homepage": "https://adityauniversity.in/360degreefeedback/",
   "scripts": {
-  "dev": "vite --host --port 9008",
-  "build": "vite build",
-  "preview": "vite preview --port 9008",
-  "lint": "eslint ."
+    "dev": "vite --host --port 9008",
+    "build": "vite build",
+    "preview": "vite preview --port 9008",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
