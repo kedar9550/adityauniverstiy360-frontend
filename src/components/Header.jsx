@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import {
   AccountCircle,
+  PersonOutline,
   Logout as LogoutIcon,
   LockReset as LockResetIcon
 } from "@mui/icons-material";
@@ -191,7 +192,7 @@ export default function Header() {
                       color: "white"
                     }}
                   >
-                    <AccountCircle fontSize="large" />
+                    <PersonOutline fontSize="large" />
                   </Avatar>
                 </IconButton>
               </Tooltip>
